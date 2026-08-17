@@ -37,7 +37,7 @@ The Actor takes different inputs for different questions. Choosing wrong wastes 
 | "Compare X across stores" | `keyword` plus several `marketplaces` |
 | Food delivery catalogs | `keywordDelivery` plus `marketplacesDelivery` |
 
-Always send `maxProductResults`, and `additionalProperties: true`. Without the second, stock and rating are missing entirely, because they are nested there.
+Always send `maxProductResults` and `additionalProperties: true`. Without the second, stock and rating are missing entirely, because they are nested there.
 
 ## The call is two tool calls
 
@@ -93,7 +93,7 @@ The Actor bills a start event per call plus per product returned, so:
 ## Gotchas
 
 - Stopping after the first tool call returns run metadata that reads like success and contains no products.
-- A retailer missing from `marketplaces` is not a reason to skip the call. Generic extraction is on by default, so unlisted shops frequently work; the listed ones simply have dedicated extractors and deeper field coverage.
+- A retailer missing from `marketplaces` is not a reason to skip the call. Generic extraction is on by default, so unlisted shops frequently work. The listed ones have dedicated extractors and deeper field coverage.
 - Omitting `additionalProperties: true` silently drops stock, rating, list price, and identifiers.
 - `rating: 0` and `stars: 0` mean absent, not a zero-star product.
 - A `listPrice` above the current price is a genuine discount; report the percentage, it is usually what the user wanted.
