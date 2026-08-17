@@ -218,6 +218,26 @@ The fixtures in `tests/fixtures/` are **real Actor output**, captured from live 
 
 If a retailer changes shape, recapture the fixture rather than loosening the assertion.
 
+## Agent skills
+
+Two skills in [`skills/`](skills/), for the two audiences:
+
+| Skill | For | What it carries |
+|---|---|---|
+| [`apify-product-lookup`](skills/apify-product-lookup/) | An agent that already has the tool | Which input to send for which question, how to read the nested fields, how to answer without overclaiming |
+| [`apify-product-data-setup`](skills/apify-product-data-setup/) | Someone wiring it up | Choosing runtime against scheduled, client config blocks, the refresh pattern, cost control |
+
+Both carry a `references/fields.md` mapping every field shape observed in live runs,
+including where Amazon and Walmart disagree. Drop either directory into your agent's
+skills folder, or package it:
+
+```bash
+python3 path/to/skill-creator/scripts/package_skill.py skills/apify-product-lookup ./dist
+```
+
+The setup skill's `references/clients.md` has the config for Claude Desktop, Claude
+Code, Cursor, n8n, and a Python example using the official SDK.
+
 ## Scheduling
 
 [`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
