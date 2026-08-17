@@ -23,10 +23,39 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, asdict, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 ACTOR_ID = "apify~e-commerce-scraping-tool"
 APIFY_BASE = "https://api.apify.com/v2"
+
+
+def load_dotenv(path: Optional[str] = None) -> None:
+    """Read a ``.env`` file next to this module into ``os.environ``.
+
+    Hand-rolled rather than pulling in python-dotenv, so ``pip install`` for this
+    starter stays a single line. Already-set variables win, so an explicit
+    ``export`` or a CI secret always overrides the file.
+    """
+    env_path = Path(path) if path else Path(__file__).with_name(".env")
+    try:
+        raw = env_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
+# Loaded at import so every entry point picks it up, including the Pinecone sink
+# in rag_refresh.py, which reads os.environ directly.
+load_dotenv()
 
 _PRICE_CHARS = re.compile(r"[^0-9.]")
 _IN_STOCK = ("instock", "in stock", "available")
