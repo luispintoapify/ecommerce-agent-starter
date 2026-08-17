@@ -1,0 +1,51 @@
+name: scheduled refresh
+
+# A working example of the scheduled path, not just a script you could schedule.
+#
+# Fork this, add an APIFY_TOKEN secret, point --catalog at your own product URLs,
+# and swap the artifact upload for `--sink pinecone` (plus its secrets) once you
+# have somewhere to put the vectors.
+#
+# It stays manual-only by default: `schedule` is commented out so a fork does not
+# start spending Actor credits on a cron nobody asked for. Uncomment when you mean
+# it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Hard cap on products collected"
+        default: "10"
+  # schedule:
+  #   - cron: "0 */6 * * *"   # every six hours, matching the Actor's own test cycle
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Refresh the product index
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          python rag_refresh.py \
+            --catalog catalog.example.json \
+            --sink jsonl \
+            --out products.jsonl \
+            --limit "${{ github.event.inputs.limit || 10 }}"
+
+      - name: Keep the output
+        uses: actions/upload-artifact@v4
+        with:
+          name: products
+          path: products.jsonl
+          retention-days: 7

@@ -1,21 +1,25 @@
 """Normalize E-commerce Scraping Tool output into a stable product shape.
 
-This module exists because the Actor's field names and types vary by retailer.
-Reading them naively works on Amazon and then breaks on the next store, so every
-read here is defensive. The variations below were observed in production code,
-not guessed:
+This module exists because the Actor's field names, types, and nesting vary by
+retailer. Reading them naively works on Amazon and then breaks on the next store,
+so every read here is defensive and looks in several places. The variations below
+were all observed in live runs, not guessed:
 
-- ``offers`` is an object, and ``offers.price`` arrives as a number on some
-  retailers and a string like ``"$328.00"`` on others.
-- the currency is ``offers.priceCurrency`` on some, ``offers.currency`` on others.
+- ``offers.price`` is a number on Amazon (``248``) and a string on Walmart
+  (``"398.99"``).
+- the currency is ``offers.priceCurrency``, which is a symbol on Amazon (``"$"``)
+  and an ISO code on Walmart (``"USD"``).
 - the title is ``name`` or ``title``.
-- ``brand`` is an object with ``name``, or a bare string.
-- images arrive as ``image`` (string or list) and/or ``images`` (list).
-- stock is ``inStock`` (bool) or ``offers.availability`` / ``availability``
-  (schema.org-ish strings like ``"InStock"``).
+- ``brand`` is an object whose only key may be ``slogan``, and that slogan is a
+  clean brand on Amazon (``"Sony"``) and a UI string on Walmart
+  (``"Visit the Sony Store"``).
+- stock, rating, and identifiers live under ``additionalProperties``, not at the
+  top level, and that sub-object is itself per-retailer: Amazon returned 44 keys,
+  Walmart returned 4.
 
-Keep the normalization in one place so the runtime path and the RAG refresh
-cannot drift apart.
+So the promoted fields below are best-effort across retailers, and
+``Product.extras`` carries the whole ``additionalProperties`` verbatim so nothing
+is lost for the retailer you actually care about.
 """
 
 from __future__ import annotations
@@ -24,18 +28,25 @@ import os
 import re
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Iterable
 
 ACTOR_ID = "apify~e-commerce-scraping-tool"
+MCP_TOOL_NAME = "apify--e-commerce-scraping-tool"
 APIFY_BASE = "https://api.apify.com/v2"
+MCP_URL = "https://mcp.apify.com?tools=apify/e-commerce-scraping-tool"
+
+_PRICE_CHARS = re.compile(r"[^0-9.]")
+_BRAND_WRAPPER = re.compile(r"^visit\s+the\s+(.+?)\s+store$", re.IGNORECASE)
+_IN_STOCK = ("instock", "in stock", "available")
+_OUT_OF_STOCK = ("outofstock", "out of stock", "soldout", "sold out")
 
 
-def load_dotenv(path: Optional[str] = None) -> None:
+def load_dotenv(path: str | None = None) -> None:
     """Read a ``.env`` file next to this module into ``os.environ``.
 
-    Hand-rolled rather than pulling in python-dotenv, so ``pip install`` for this
-    starter stays a single line. Already-set variables win, so an explicit
-    ``export`` or a CI secret always overrides the file.
+    Hand-rolled rather than pulling in python-dotenv, so the dependency list stays
+    short. Already-set variables win, so an explicit ``export`` or a CI secret
+    always overrides the file.
     """
     env_path = Path(path) if path else Path(__file__).with_name(".env")
     try:
@@ -53,42 +64,56 @@ def load_dotenv(path: Optional[str] = None) -> None:
             os.environ[key] = value
 
 
-# Loaded at import so every entry point picks it up, including the Pinecone sink
-# in rag_refresh.py, which reads os.environ directly.
+# Loaded at import so every entry point picks it up.
 load_dotenv()
-
-_PRICE_CHARS = re.compile(r"[^0-9.]")
-_IN_STOCK = ("instock", "in stock", "available")
-_OUT_OF_STOCK = ("outofstock", "out of stock", "soldout", "sold out")
 
 
 @dataclass
 class Product:
     """One product, with the fields an agent or a vector store actually needs."""
 
+    # Present on every retailer worth using.
     name: str = ""
     brand: str = ""
     description: str = ""
-    price: Optional[float] = None
+    price: float | None = None
     currency: str = ""
-    availability: str = ""
-    in_stock: Optional[bool] = None
-    images: List[str] = field(default_factory=list)
     url: str = ""
     retailer: str = ""
-    identifier: str = ""
+    images: list[str] = field(default_factory=list)
     fetched_at: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    # Best-effort: found on some retailers, absent on others. None or empty means
+    # the retailer did not report it, never that the answer is no.
+    in_stock: bool | None = None
+    stock_text: str = ""
+    availability: str = ""
+    rating: float | None = None
+    review_count: int | None = None
+    list_price: float | None = None
+    identifier: str = ""
+    breadcrumbs: str = ""
+    delivery: str = ""
+    features: list[str] = field(default_factory=list)
+    variants: list[str] = field(default_factory=list)
+
+    # The whole `additionalProperties` object, verbatim. Large: a single Amazon
+    # product carried 44 keys and about 100 KB. See `to_dict(include_extras=...)`.
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self, include_extras: bool = True) -> dict[str, Any]:
+        data = asdict(self)
+        if not include_extras:
+            data.pop("extras", None)
+        return data
 
     def format_price(self) -> str:
         """Render the price with its currency.
 
         The currency arrives as a symbol on some retailers and an ISO code on
         others: Amazon returned ``"$"`` and Walmart returned ``"USD"`` for the
-        same dollar. A symbol butts against the number, a code takes a space,
-        so "$248" and "USD 398.99" both read correctly.
+        same dollar. A symbol butts against the number, a code takes a space, so
+        "$248" and "USD 398.99" both read correctly.
         """
         if self.price is None:
             return ""
@@ -99,26 +124,51 @@ class Product:
             return f"{self.currency} {amount}"
         return f"{self.currency}{amount}"
 
+    def discount_percent(self) -> int | None:
+        """How far below list price, when the retailer reported both."""
+        if self.price is None or self.list_price is None or self.list_price <= 0:
+            return None
+        if self.price >= self.list_price:
+            return None
+        return round((1 - self.price / self.list_price) * 100)
+
     def to_text(self) -> str:
         """A compact document for embedding.
 
-        Price and availability lead, because those are the fields that make a
-        stale index wrong, and putting them first keeps them inside the window
-        when a chunker truncates.
+        Price and stock lead, because those are the fields that make a stale index
+        wrong, and putting them first keeps them inside the window when a chunker
+        truncates. `extras` is deliberately excluded: it is far too large, and an
+        agent reading a retailer's raw internals is not the point.
         """
-        bits: List[str] = []
+        bits: list[str] = []
         if self.name:
             bits.append(self.name)
         if self.brand:
             bits.append(f"Brand: {self.brand}")
         if self.price is not None:
-            bits.append(f"Price: {self.format_price()}")
-        if self.in_stock is not None:
-            bits.append("In stock" if self.in_stock else "Out of stock")
+            line = f"Price: {self.format_price()}"
+            discount = self.discount_percent()
+            if discount:
+                bits.append(f"{line} (down {discount}% from {self.list_price:g})")
+            else:
+                bits.append(line)
+        if self.in_stock is True:
+            bits.append(f"In stock{': ' + self.stock_text if self.stock_text else ''}")
+        elif self.in_stock is False:
+            bits.append("Out of stock")
         elif self.availability:
             bits.append(f"Availability: {self.availability}")
+        if self.rating is not None:
+            count = f" from {self.review_count} reviews" if self.review_count else ""
+            bits.append(f"Rated {self.rating}{count}")
+        if self.delivery:
+            bits.append(f"Delivery: {self.delivery}")
         if self.retailer:
             bits.append(f"Retailer: {self.retailer}")
+        if self.breadcrumbs:
+            bits.append(f"Category: {self.breadcrumbs}")
+        if self.features:
+            bits.append("Features: " + "; ".join(self.features[:6]))
         if self.description:
             bits.append(self.description)
         if self.fetched_at:
@@ -126,7 +176,10 @@ class Product:
         return "\n".join(bits)
 
 
-def parse_price(raw: Any) -> Optional[float]:
+# --- field readers ------------------------------------------------------------
+
+
+def parse_price(raw: Any) -> float | None:
     """Return a positive float, or None. Handles ``328``, ``"328.00"``, ``"$328"``."""
     if isinstance(raw, bool):
         return None
@@ -146,19 +199,13 @@ def parse_price(raw: Any) -> Optional[float]:
     return None
 
 
-_BRAND_WRAPPER = re.compile(r"^visit\s+the\s+(.+?)\s+store$", re.IGNORECASE)
-
-
 def _clean_brand(value: str) -> str:
     """Reduce a brand candidate to a name, or reject it.
 
-    ``brand.slogan`` carries whatever text the retailer put in that slot, which
-    is a clean brand on some and a UI string on others. Both observed live:
-    Amazon returned ``"Sony"``, Walmart returned ``"Visit the Sony Store"``.
-
-    So unwrap that pattern, then reject anything still shaped like a phrase. A
-    brand is a name. "Brand: Visit the Sony Store" embedded in a document an
-    agent cites is worse than no brand at all, because it reads as fact.
+    ``brand.slogan`` carries whatever text the retailer put in that slot: Amazon
+    returned ``"Sony"``, Walmart returned ``"Visit the Sony Store"``. Unwrap that
+    pattern, then reject anything still shaped like a phrase, because
+    "Brand: Visit the Sony Store" in a document an agent cites reads as fact.
     """
     value = value.strip()
     if not value:
@@ -172,12 +219,6 @@ def _clean_brand(value: str) -> str:
 
 
 def read_brand(raw: Any) -> str:
-    """Read the brand from a string, or from an object under ``name`` or ``slogan``.
-
-    ``slogan`` is checked because a live Amazon product returned
-    ``{"slogan": "Sony"}`` with no ``name`` key at all, so reading only ``name``
-    dropped the brand on the most common retailer of all.
-    """
     if isinstance(raw, str):
         return _clean_brand(raw)
     if isinstance(raw, dict):
@@ -190,47 +231,113 @@ def read_brand(raw: Any) -> str:
     return ""
 
 
-def read_images(item: Dict[str, Any]) -> List[str]:
-    out: List[str] = []
-    for key in ("image", "images"):
-        raw = item.get(key)
-        if isinstance(raw, str):
-            out.append(raw)
-        elif isinstance(raw, list):
-            out.extend(u for u in raw if isinstance(u, str))
-    seen = set()
-    deduped = []
-    for url in out:
+def _image_urls(raw: Any) -> Iterable[str]:
+    """Yield URLs from a string, a list of strings, or a list of objects.
+
+    Walmart nests images as ``additionalProperties.images`` holding
+    ``[{"url": ...}]``, while Amazon uses plain string lists. Both appear.
+    """
+    if isinstance(raw, str):
+        yield raw
+    elif isinstance(raw, list):
+        for entry in raw:
+            if isinstance(entry, str):
+                yield entry
+            elif isinstance(entry, dict):
+                url = entry.get("url") or entry.get("src")
+                if isinstance(url, str):
+                    yield url
+
+
+def read_images(item: dict[str, Any], extras: dict[str, Any]) -> list[str]:
+    """Collect image URLs, preferring the highest resolution the retailer offered."""
+    ordered: list[str] = []
+    sources = (
+        extras.get("highResolutionImages"),
+        item.get("image"),
+        item.get("images"),
+        extras.get("images"),
+        extras.get("galleryThumbnails"),
+    )
+    for source in sources:
+        ordered.extend(_image_urls(source))
+    seen: set[str] = set()
+    out: list[str] = []
+    for url in ordered:
         if url.startswith("http") and url not in seen:
             seen.add(url)
-            deduped.append(url)
-    return deduped
+            out.append(url)
+    return out
 
 
-def read_in_stock(item: Dict[str, Any]) -> Optional[bool]:
+def read_in_stock(item: dict[str, Any], extras: dict[str, Any]) -> bool | None:
     """Tri-state on purpose.
 
     None means the retailer did not say. Collapsing that to False would tell an
-    agent a product is unavailable when nobody claimed that, which is the kind of
-    confident wrong answer this repo exists to avoid.
+    agent a product is unavailable when nobody claimed it, which is the kind of
+    confident wrong answer this repo exists to avoid. Amazon reports stock under
+    ``additionalProperties.inStock``; Walmart did not report it at all.
     """
-    direct = item.get("inStock")
-    if isinstance(direct, bool):
-        return direct
-    offers = item.get("offers")
-    availability = ""
-    if isinstance(offers, dict):
-        availability = str(offers.get("availability") or "")
-    if not availability:
-        availability = str(item.get("availability") or "")
-    low = availability.lower()
-    if not low:
+    for candidate in (item.get("inStock"), extras.get("inStock")):
+        if isinstance(candidate, bool):
+            return candidate
+    offers = item.get("offers") if isinstance(item.get("offers"), dict) else {}
+    text = str(
+        offers.get("availability")
+        or item.get("availability")
+        or extras.get("inStockText")
+        or ""
+    ).lower()
+    if not text:
         return None
-    if any(token in low for token in _OUT_OF_STOCK):
+    if any(token in text for token in _OUT_OF_STOCK):
         return False
-    if any(token in low for token in _IN_STOCK):
+    if any(token in text for token in _IN_STOCK):
         return True
     return None
+
+
+def read_rating(item: dict[str, Any], extras: dict[str, Any]) -> float | None:
+    """Prefer ``additionalProperties.stars`` over the top-level ``rating``.
+
+    A live Amazon product reported ``rating: null`` alongside ``stars: 4.2``, and
+    a Walmart result reported ``rating: 0``. Zero is not a rating anyone gave.
+    """
+    for candidate in (extras.get("stars"), item.get("rating")):
+        if isinstance(candidate, bool):
+            continue
+        if isinstance(candidate, (int, float)) and candidate > 0:
+            return float(candidate)
+    return None
+
+
+def read_int(raw: Any) -> int | None:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    if isinstance(raw, float):
+        return int(raw) if raw > 0 else None
+    if isinstance(raw, str):
+        digits = re.sub(r"[^0-9]", "", raw)
+        return int(digits) if digits else None
+    return None
+
+
+def read_str_list(raw: Any, limit: int = 20) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for entry in raw:
+        if isinstance(entry, str) and entry.strip():
+            out.append(entry.strip())
+        elif isinstance(entry, dict):
+            label = entry.get("name") or entry.get("value") or entry.get("title")
+            if isinstance(label, str) and label.strip():
+                out.append(label.strip())
+        if len(out) >= limit:
+            break
+    return out
 
 
 def retailer_from_url(url: str) -> str:
@@ -241,6 +348,7 @@ def retailer_from_url(url: str) -> str:
         "ebay.com": "eBay",
         "bestbuy.com": "Best Buy",
         "homedepot.com": "Home Depot",
+        "lowes.com": "Lowe's",
         "ikea.com": "IKEA",
         "tesco.com": "Tesco",
         "wayfair.com": "Wayfair",
@@ -255,34 +363,71 @@ def retailer_from_url(url: str) -> str:
     return base[:1].upper() + base[1:]
 
 
-def normalize(item: Dict[str, Any], fetched_at: str, fallback_url: str = "") -> Product:
+def normalize(item: dict[str, Any], fetched_at: str, fallback_url: str = "") -> Product:
+    extras = item.get("additionalProperties")
+    extras = extras if isinstance(extras, dict) else {}
     offers = item.get("offers") if isinstance(item.get("offers"), dict) else {}
-    url = item.get("url") or fallback_url or ""
-    currency = offers.get("priceCurrency") or offers.get("currency") or ""
-    availability = str(offers.get("availability") or item.get("availability") or "")
+    url = str(item.get("url") or fallback_url or "")
+
+    list_price_raw = extras.get("listPrice")
+    list_price = None
+    if isinstance(list_price_raw, dict):
+        list_price = parse_price(list_price_raw.get("value"))
+    else:
+        list_price = parse_price(list_price_raw)
+
+    currency = (
+        offers.get("priceCurrency")
+        or offers.get("currency")
+        or extras.get("currencyRaw")
+        or ""
+    )
+
     return Product(
         name=str(item.get("name") or item.get("title") or "").strip(),
         brand=read_brand(item.get("brand")),
         description=str(item.get("description") or "").strip(),
         price=parse_price(offers.get("price")),
         currency=str(currency),
-        availability=availability,
-        in_stock=read_in_stock(item),
-        images=read_images(item),
-        url=str(url),
-        retailer=retailer_from_url(str(url)),
-        identifier=str(item.get("gtin") or item.get("sku") or ""),
+        url=url,
+        retailer=retailer_from_url(url),
+        images=read_images(item, extras),
         fetched_at=fetched_at,
+        in_stock=read_in_stock(item, extras),
+        stock_text=str(extras.get("inStockText") or "").strip(),
+        availability=str(offers.get("availability") or item.get("availability") or ""),
+        rating=read_rating(item, extras),
+        review_count=read_int(item.get("reviewCount")),
+        list_price=list_price,
+        identifier=str(
+            item.get("gtin") or item.get("sku") or extras.get("sku") or extras.get("asin") or ""
+        ),
+        breadcrumbs=str(extras.get("breadCrumbs") or "").strip(),
+        delivery=str(extras.get("delivery") or extras.get("fastestDelivery") or "").strip(),
+        features=read_str_list(extras.get("features")),
+        variants=read_str_list(extras.get("variantDetails") or extras.get("variantAttributes")),
+        extras=extras,
     )
 
 
 def is_usable(product: Product) -> bool:
     """A row with neither a name nor a price means the page was not recognized.
 
-    Feeding those into an index is how a RAG store fills up with blanks that an
-    agent later cites as fact.
+    A URL that does not resolve comes back as an item with every field empty
+    rather than as an error, and feeding those into an index is how a vector store
+    fills up with blanks an agent later cites as fact.
     """
     return bool(product.name) or product.price is not None
+
+
+def normalize_all(
+    items: Iterable[dict[str, Any]], fetched_at: str, fallback_url: str = ""
+) -> list[Product]:
+    products = (normalize(item, fetched_at, fallback_url) for item in items)
+    return [p for p in products if is_usable(p)]
+
+
+# --- Apify REST ---------------------------------------------------------------
 
 
 def api_token() -> str:
@@ -295,19 +440,21 @@ def api_token() -> str:
 
 
 def run_actor_sync(
-    payload: Dict[str, Any],
-    max_items: Optional[int] = None,
+    payload: dict[str, Any],
+    max_items: int | None = None,
     timeout_secs: int = 300,
-) -> List[Dict[str, Any]]:
-    """Run the Actor and return dataset items.
+) -> list[dict[str, Any]]:
+    """Run the Actor over the REST API and return dataset items.
 
-    Uses run-sync-get-dataset-items so there is nothing to poll. ``max_items`` is
-    a hard cap the platform enforces, which matters because this Actor bills per
-    product pushed: leave it set unless you mean to spend.
+    Used by ``rag_refresh.py``. The MCP path lives in ``mcp_client.py``: see the
+    README for why the batch job does not go through MCP.
+
+    ``max_items`` is a hard cap the platform enforces, which matters because this
+    Actor bills per product pushed: leave it set unless you mean to spend.
     """
     import httpx  # imported here so `--help` works without the dependency
 
-    params = {"timeout": str(timeout_secs)}
+    params: dict[str, str] = {"timeout": str(timeout_secs)}
     if max_items is not None:
         params["maxItems"] = str(max_items)
 
@@ -324,10 +471,3 @@ def run_actor_sync(
         )
     items = response.json()
     return items if isinstance(items, list) else []
-
-
-def normalize_all(
-    items: Iterable[Dict[str, Any]], fetched_at: str, fallback_url: str = ""
-) -> List[Product]:
-    products = (normalize(item, fetched_at, fallback_url) for item in items)
-    return [p for p in products if is_usable(p)]

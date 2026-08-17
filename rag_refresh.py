@@ -78,17 +78,23 @@ def fetch_keyword(keyword: str, marketplaces: List[str], limit: int, mode: str) 
 # --- sinks -------------------------------------------------------------------
 
 
-def sink_jsonl(products: List[Product], path: str) -> None:
-    """Write documents to a file. No dependencies, and it shows you the shape."""
+def sink_jsonl(products: List[Product], path: str, include_extras: bool = False) -> None:
+    """Write documents to a file. No dependencies, and it shows you the shape.
+
+    ``extras`` is excluded by default. One Amazon product carried 44 keys and
+    about 100 KB there, so a hundred products would produce a 10 MB file whose
+    bulk is retailer internals nobody embeds.
+    """
     with open(path, "w", encoding="utf-8") as handle:
         for product in products:
             record = {
                 "id": doc_id(product),
                 "text": product.to_text(),
-                "metadata": product.to_dict(),
+                "metadata": product.to_dict(include_extras=include_extras),
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-    print(f"wrote {len(products)} documents to {path}")
+    size_mb = os.path.getsize(path) / 1_048_576
+    print(f"wrote {len(products)} documents to {path} ({size_mb:.1f} MB)")
 
 
 def sink_pinecone(products: List[Product]) -> None:
@@ -122,7 +128,10 @@ def sink_pinecone(products: List[Product]) -> None:
         embeddings = openai.embeddings.create(model=embed_model, input=texts)
         vectors = []
         for product, entry in zip(batch, embeddings.data):
-            metadata = product.to_dict()
+            # extras is excluded: Pinecone caps metadata at 40 KB per vector and a
+            # single Amazon product's additionalProperties ran to about 100 KB, so
+            # including it fails the upsert outright.
+            metadata = product.to_dict(include_extras=False)
             # Pinecone metadata rejects None; drop rather than coerce, because
             # False and "unknown" are different answers about stock.
             metadata = {k: v for k, v in metadata.items() if v is not None}
@@ -166,6 +175,12 @@ def main() -> int:
     parser.add_argument("--listing", action="store_true", help="Route URLs through listingUrls")
     parser.add_argument("--sink", default="jsonl", choices=["jsonl", "pinecone"])
     parser.add_argument("--out", default="products.jsonl", help="Path for the jsonl sink")
+    parser.add_argument(
+        "--extras",
+        action="store_true",
+        help="Include the retailer's full additionalProperties in the jsonl "
+        "metadata. Off by default: about 100 KB per Amazon product.",
+    )
     parser.add_argument(
         "--batch",
         type=int,
@@ -220,7 +235,7 @@ def main() -> int:
         print(f"note: {unknown_stock} product(s) did not report stock")
 
     if args.sink == "jsonl":
-        sink_jsonl(products, args.out)
+        sink_jsonl(products, args.out, include_extras=args.extras)
     else:
         sink_pinecone(products)
     return 0

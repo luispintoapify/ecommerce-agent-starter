@@ -1,8 +1,11 @@
-"""The runtime path: fetch live product data at the moment a question is asked.
+"""The runtime path: fetch live product data over MCP, the way an agent does.
 
-Use this when the answer has to be true right now, for a handful of products.
-For a catalog, use rag_refresh.py instead: this Actor bills per product pushed
-plus a start event per call, so many small calls cost more than one batched call.
+This goes through the Apify MCP server, so what you see here is what your agent
+sees. It is two tool calls under the hood; ``mcp_client.py`` explains why.
+
+Use this when the answer has to be true right now, for a handful of products. For
+a catalog, use ``rag_refresh.py``: the Actor bills a start event per call plus per
+product, so many small calls cost more than one batched call.
 
 Examples
 --------
@@ -15,25 +18,25 @@ Examples
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
-from apify_products import Product, normalize_all, run_actor_sync
+from apify_products import Product
 
 
-def build_payload(args: argparse.Namespace) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
+def build_input(args: argparse.Namespace) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "maxProductResults": args.limit,
         "additionalProperties": True,
         "scrapeMode": args.mode,
     }
     if args.url:
-        # detailsUrls is the schema's field for individual product detail pages.
-        # If a retailer returns nothing here, try --listing, which routes the same
-        # URLs through listingUrls instead. See the README note.
+        # detailsUrls is the schema's field for individual product detail pages,
+        # and it is confirmed working. --listing routes the same URLs through
+        # listingUrls if you want to rule the input field out.
         key = "listingUrls" if args.listing else "detailsUrls"
         payload[key] = [{"url": u} for u in args.url]
     if args.keyword:
@@ -42,37 +45,74 @@ def build_payload(args: argparse.Namespace) -> Dict[str, Any]:
     return payload
 
 
-def render(products: List[Product], elapsed: float) -> None:
+def render(products: list[Product], elapsed: float, summary: str) -> None:
+    count = f"{len(products)} product(s)"
+    print(f"\n{summary}   {count}   wall clock {elapsed:.1f}s\n")
     if not products:
         print(
-            "No product data came back. The URL may not be a product page, or the "
-            "retailer may not be supported. Try --listing, or check the Actor's "
-            "supported marketplaces."
+            "No usable product data came back. A URL that does not resolve returns\n"
+            "an item with every field empty rather than an error, so check the URL\n"
+            "first, then try --listing."
         )
         return
 
-    print(f"{len(products)} product(s) in {elapsed:.1f}s\n")
     for product in products:
-        money = "price not returned"
-        if product.price is not None:
-            money = f"{product.currency} {product.price}".strip()
+        print(f"  {product.name or 'name not returned'}")
+
+        money = product.format_price() or "price not returned"
+        discount = product.discount_percent()
+        if discount:
+            money += f" (down {discount}% from {product.list_price:g})"
         if product.in_stock is True:
-            stock = "in stock"
+            stock = product.stock_text or "in stock"
         elif product.in_stock is False:
             stock = "out of stock"
         else:
-            stock = "stock unknown"
-        print(f"  {product.name or 'name not returned'}")
-        print(f"    {money}  |  {stock}  |  {product.retailer or 'unknown retailer'}")
+            stock = "stock not reported"
+        print(f"    {money}  |  {stock}")
+
+        line = []
+        if product.brand:
+            line.append(product.brand)
+        if product.rating is not None:
+            count = f" ({product.review_count})" if product.review_count else ""
+            line.append(f"{product.rating}/5{count}")
+        if product.retailer:
+            line.append(product.retailer)
+        if line:
+            print(f"    {'  |  '.join(line)}")
+
+        if product.delivery:
+            print(f"    delivery: {product.delivery}")
         if product.images:
-            print(f"    {len(product.images)} image URL(s), first: {product.images[0]}")
+            print(f"    {len(product.images)} image URL(s)")
         if product.url:
             print(f"    {product.url}")
         print()
 
 
+async def run(args: argparse.Namespace) -> int:
+    from mcp_client import McpError, fetch_products, run_summary
+
+    started = time.monotonic()
+    try:
+        products, meta = await fetch_products(build_input(args), limit=args.limit)
+    except McpError as err:
+        print(str(err), file=sys.stderr)
+        return 1
+    elapsed = time.monotonic() - started
+
+    if args.json:
+        print(json.dumps([p.to_dict(include_extras=args.extras) for p in products], indent=2))
+    else:
+        render(products, elapsed, run_summary(meta))
+    return 0
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--url", nargs="*", default=[], help="One or more product detail URLs")
     parser.add_argument("--keyword", help="Search term, used with --marketplaces")
     parser.add_argument(
@@ -99,30 +139,19 @@ def main() -> int:
         action="store_true",
         help="Send --url through listingUrls instead of detailsUrls",
     )
-    parser.add_argument("--json", action="store_true", help="Print normalized JSON instead of text")
+    parser.add_argument("--json", action="store_true", help="Print normalized JSON")
+    parser.add_argument(
+        "--extras",
+        action="store_true",
+        help="With --json, include the retailer's full additionalProperties. Large: "
+        "one Amazon product carried 44 keys and about 100 KB.",
+    )
     args = parser.parse_args()
 
     if not args.url and not args.keyword:
         parser.error("give --url and/or --keyword")
 
-    payload = build_payload(args)
-    fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-    started = time.monotonic()
-    try:
-        items = run_actor_sync(payload, max_items=args.limit)
-    except RuntimeError as err:
-        print(str(err), file=sys.stderr)
-        return 1
-    elapsed = time.monotonic() - started
-
-    products = normalize_all(items, fetched_at, args.url[0] if args.url else "")
-
-    if args.json:
-        print(json.dumps([p.to_dict() for p in products], indent=2))
-    else:
-        render(products, elapsed)
-    return 0
+    return asyncio.run(run(args))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the floor: the official mcp SDK requires it.
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Test
+        # No Apify token needed. The suite runs against captured Actor output in
+        # tests/fixtures/, so it never spends credits and never flakes on a
+        # retailer being slow.
+        run: pytest -q
+
+      - name: Import check
+        # Catches a syntax error or a bad import in the entry points, which the
+        # unit tests alone would not reach.
+        run: |
+          python -c "import apify_products, mcp_client"
+          python runtime_call.py --help > /dev/null
+          python rag_refresh.py --help > /dev/null

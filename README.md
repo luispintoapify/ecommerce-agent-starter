@@ -1,21 +1,25 @@
 # ecommerce-agent-starter
 
-Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp): current price, availability, brand, description, and image URLs from Amazon, Walmart, Target, eBay, and 75 more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
+Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp): current price, stock, brand, rating, and image URLs from Amazon, Walmart, Target, eBay, and 75 more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
 
 A language model answers product questions from training data that was fixed months ago, or from browsing that reads a page as prose with no product fields. Neither gives you a price you can rely on today. This starter wires an agent to the real thing, as structured fields it can compare, filter, and act on.
 
 Two paths, because they solve different problems:
 
-| | When to use it | What it costs |
+| | Transport | When to use it |
 |---|---|---|
-| **Runtime call** | The answer has to be true right now, for a handful of products | A start event per call plus per product |
-| **Scheduled refresh** | A catalog an agent answers from repeatedly | One start event per batch, so far cheaper per product |
+| **`runtime_call.py`** | Apify MCP server | The answer has to be true right now, for a handful of products |
+| **`rag_refresh.py`** | Apify REST API | A catalog an agent answers from repeatedly |
 
-Both run on [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool), an Apify Actor that handles anti-bot, proxies, and per-retailer extraction so there is no scraper in this repo to maintain.
+Both run [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool), an Apify Actor that handles anti-bot, proxies, and per-retailer extraction, so there is no scraper in this repo to maintain.
+
+**Why two transports.** The runtime path goes through MCP because that is what an agent does, so the code shows you what your agent is doing. The batch job does not: a cron with no agent in it gains nothing from the protocol, and it needs the full dataset rather than a tool result. `apify_products.py` normalizes both into the same shape, and a test asserts the two agree.
+
+Requires **Python 3.10 or newer**, because the official `mcp` SDK does.
 
 ## Connect it to your agent
 
-Every path below points at the same MCP server, [mcp.apify.com](https://docs.apify.com/integrations/mcp). Nothing to host.
+Every path below points at the same MCP server. Nothing to host.
 
 ### Claude Desktop and Claude Code
 
@@ -33,7 +37,7 @@ Copy [`mcp_config.json`](mcp_config.json) into your Claude config, or paste this
 
 Claude Desktop reads `claude_desktop_config.json`. On macOS that is `~/Library/Application Support/Claude/`, on Windows `%APPDATA%\Claude\`. Restart Claude and the tool appears. You authenticate with OAuth on first use, so no token goes in the file.
 
-Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store) at runtime instead of just this one Actor. Keeping the parameter narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
+Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store) at runtime instead of just this one Actor. Keeping it narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
 
 ### Cursor
 
@@ -53,18 +57,35 @@ Authenticate with a bearer token from [Apify Console](https://console.apify.com/
 
 Any MCP client that speaks Streamable HTTP works against the same URL. SSE was removed on April 1, 2026. The [Apify MCP documentation](https://docs.apify.com/integrations/mcp) covers transports, authentication, and Actor discovery in full.
 
+## What the MCP flow actually looks like
+
+Worth knowing before you design a prompt around it: **fetching products is two tool calls, not one.**
+
+1. Call `apify--e-commerce-scraping-tool`. Note the two hyphens where the Actor id uses a slash. It returns run metadata (`runId`, status, stats, and the id of the dataset it wrote) plus a text block telling the caller to fetch the items separately. **No products.**
+2. Call `get-dataset-items` with that `datasetId`. The products come back here.
+
+That is why the server exposes helper tools alongside the Actor even when the URL narrows the list:
+
+```
+get-actor-run, get-dataset-items, get-key-value-store-record,
+abort-actor-run, apify--e-commerce-scraping-tool
+```
+
+`mcp_client.py` implements both calls. If you are writing your own agent prompt, make sure it knows to follow through on the second one.
+
 ## Run the scripts
 
 ```bash
 git clone https://github.com/luispintoapify/ecommerce-agent-starter
 cd ecommerce-agent-starter
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env      # add your APIFY_TOKEN
 ```
 
 Your token comes from [Apify Console](https://console.apify.com/settings/integrations). The free tier is enough to try everything here.
 
-One product, live:
+One product, live, over MCP:
 
 ```bash
 python runtime_call.py --url https://www.amazon.com/dp/B09XS7JWHH
@@ -94,25 +115,22 @@ python rag_refresh.py --catalog catalog.example.json --sink pinecone
 
 ## What comes back
 
-`apify_products.py` normalizes the Actor's output into one stable shape. That module is the part worth reading, because field names and types vary by retailer, and reading them naively works on Amazon and then breaks on the next store.
+`apify_products.py` normalizes the Actor's output into one stable shape. That module is the part worth reading, because field names, types, and nesting vary by retailer, and reading them naively works on Amazon and then breaks on the next store.
 
-These are measured against live runs on Amazon and Walmart, not guessed:
+Measured against live runs, not guessed:
 
 | Field | Amazon returned | Walmart returned |
 |---|---|---|
 | `offers.price` | `248` (number) | `"398.99"` (string) |
 | `offers.priceCurrency` | `"$"` (symbol) | `"USD"` (code) |
 | `brand` | `{"slogan": "Sony"}` | `{"slogan": "Visit the Sony Store"}` |
-| `inStock` / `availability` | both `null` | both `null` |
-| `rating` / `reviewCount` | `null` / `20002` | `0` / `0` |
+| `additionalProperties` | 44 keys | 4 keys |
 
-Also seen: the title is `name` or `title`, and images arrive as `image` (string or list) or `images` (list).
+Two of those are worth dwelling on.
 
-Two of those rows are worth dwelling on.
+**`brand` is not reliably a brand.** The `slogan` slot carries whatever text the retailer put there. The normalizer unwraps the "Visit the X Store" pattern and rejects anything still shaped like a phrase, because `Brand: Visit the Sony Store` embedded in a document an agent cites reads as fact.
 
-**`brand` is not reliably a brand.** The `slogan` slot carries whatever text the retailer put there. `apify_products.py` unwraps the "Visit the X Store" pattern and rejects anything still shaped like a phrase, because `Brand: Visit the Sony Store` embedded in a document an agent cites is worse than no brand at all.
-
-**`rating` and `reviewCount` are not exposed by this starter**, deliberately. Amazon reported 20,002 reviews with a `null` rating, and Walmart reported `0` and `0` for a product that plainly has reviews. Passing those through would put numbers in front of an agent that are wrong in both directions.
+**Stock, rating, and identifiers are nested under `additionalProperties`, not at the top level**, and that sub-object is itself per-retailer. Amazon returned 44 keys there including `inStock`, `stars`, and `listPrice`. Walmart returned 4. So the promoted fields below are best-effort, and `Product.extras` carries the whole thing verbatim for the retailer you actually care about.
 
 Normalized, from a real Amazon run:
 
@@ -121,22 +139,37 @@ Product(
     name="Sony WH-1000XM5 Premium Noise Cancelling Wireless Headphones, Black",
     brand="Sony",
     price=248.0,
-    currency="$",          # format_price() renders "$248"
-    in_stock=None,         # the retailer did not say
+    currency="$",              # format_price() renders "$248"
+    list_price=399.99,         # discount_percent() returns 38
+    in_stock=True,
+    stock_text="In Stock  Only 15 left in stock - order soon.",
+    rating=4.2,
+    review_count=20002,
+    identifier="B09XS7JWHH",
+    delivery="Saturday, August 22",
     images=["https://..."],
     url="https://www.amazon.com/dp/B09XS7JWHH",
     retailer="Amazon",
     fetched_at="2026-08-17T08:17:07+00:00",
+    extras={...},              # the retailer's own 44 fields
 )
 ```
 
-`in_stock` is deliberately tri-state, and the run above is exactly why. `None` means the retailer did not say. Collapsing that to `False` would tell an agent a product is unavailable when nobody claimed it, which is the class of confident wrong answer this repo exists to avoid.
+Three deliberate choices:
 
-**Neither Amazon nor Walmart returned stock in testing.** Plan for `None` as the normal case and design the agent's answer around it, rather than treating stock as a field you can count on.
+**`in_stock` is tri-state.** `None` means the retailer did not report it, and not every retailer does. Collapsing that to `False` would tell an agent a product is unavailable when nobody claimed it, which is the class of confident wrong answer this repo exists to avoid.
 
-`format_price()` handles the currency inconsistency: a symbol butts against the number, an ISO code takes a space, so both `$248` and `USD 398.99` read correctly.
+**`rating` prefers `additionalProperties.stars`.** A live Amazon product reported `rating: null` next to `stars: 4.2`, and a zero rating is treated as absent, because nobody gave it.
 
-Rows with neither a name nor a price are dropped rather than indexed. An unrecognized page otherwise fills a vector store with blanks that an agent later cites as fact.
+**Rows with neither a name nor a price are dropped rather than indexed.** A URL that does not resolve comes back as an item with every field empty rather than as an error, and feeding those into a vector store fills it with blanks an agent later cites as fact.
+
+### extras is large
+
+One Amazon product's `additionalProperties` ran to roughly 100 KB across 44 keys: A+ content, review text, variant tables, bestseller ranks. So:
+
+- `to_text()`, the embedded document, never includes it
+- the `jsonl` sink excludes it unless you pass `--extras`
+- the Pinecone sink always excludes it, because Pinecone caps metadata at 40 KB per vector and the upsert would fail outright
 
 ## Tell the agent how fresh the data is
 
@@ -158,23 +191,9 @@ E-commerce Scraping Tool bills per event: a start event per call, plus per produ
 - **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default.
 - **Cap.** `--limit` is a hard cap the platform enforces, not a suggestion. Leave it set.
 
-On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. Throughput is good because the Actor routes to per-retailer Standby Actors that stay warm.
+On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. A single Amazon product came back in about 10 seconds, and the MCP path adds the second call on top of that.
 
-### Latency varies enormously by retailer
-
-Measured, one product at a time:
-
-| Call | Time |
-|---|---|
-| Amazon, one product by URL | **10.3s** |
-| Walmart, three products by keyword | **174.1s** |
-
-The Actor itself does not run in Standby, so every call starts an orchestrator run and a one-product call does not take a 175th of 60 seconds. Ten seconds is workable inside a considered interaction. Nearly three minutes is not, and it is not an outlier.
-
-Two consequences:
-
-- **Measure your own retailers before putting a runtime call in a chat turn.** Design the UX around what you measure, not around the Amazon number.
-- **`--batch` defaults to 8, not something larger.** The whole call shares one 300 second timeout, so a batch of 25 slow URLs times out and loses every product in it. Raise it only for retailers you have timed.
+Latency varies by retailer, so measure your own before putting a runtime call inside a chat turn, and design the UX around what you measure. `--batch` defaults to 8 for the same reason: the whole call shares one 300 second timeout, so a large batch of slow URLs times out and loses every product in it.
 
 ## Retailers
 
@@ -184,11 +203,24 @@ The current list is in the [Actor's input schema](https://apify.com/apify/e-comm
 
 ### When a URL comes back empty
 
-`detailsUrls` is the input field for individual product detail pages, and it is confirmed working: an Amazon product URL returned a full record in 10.3s. Both scripts use it.
+`detailsUrls` is the input field for individual product detail pages, and it is confirmed working. Both scripts use it.
 
-A URL that does not resolve comes back as an item with **no fields at all**, not as an error. That was reproduced with a URL whose product ID did not exist: 118 seconds, one item, every field empty. The pipeline drops those rather than indexing them, and `runtime_call.py` says so plainly instead of printing a blank record.
+A URL that does not resolve returns an item with no fields rather than an error, so check the URL itself first. `--listing` routes the same URLs through `listingUrls` if you want to rule the input field out, and an issue naming the retailer is welcome either way.
 
-So if a URL comes back empty, check the URL itself first. `--listing` routes the same URLs through `listingUrls` if you want to rule the input field out, and an issue naming the retailer is welcome either way.
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+The fixtures in `tests/fixtures/` are **real Actor output**, captured from live runs against Amazon and Walmart. Every quirk asserted in the suite was found by running the Actor, not by imagining what it might return, and one test asserts the MCP and REST paths normalize to the same product. No token is needed and no credits are spent, so CI runs it on every push across Python 3.10 through 3.13.
+
+If a retailer changes shape, recapture the fixture rather than loosening the assertion.
+
+## Scheduling
+
+[`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
 
 ## Demo
 
@@ -196,7 +228,7 @@ So if a URL comes back empty, check the URL itself first. `--listing` routes the
 
 ## Contributing
 
-Issues and pull requests welcome, particularly retailer-specific field quirks. If a retailer returns a shape `apify_products.py` mishandles, an issue with the raw dataset item is the most useful thing you can send.
+Issues and pull requests welcome, particularly retailer-specific field quirks. If a retailer returns a shape `apify_products.py` mishandles, an issue with the raw dataset item is the most useful thing you can send, because it becomes a fixture.
 
 ## License
 
