@@ -166,7 +166,14 @@ def main() -> int:
     parser.add_argument("--listing", action="store_true", help="Route URLs through listingUrls")
     parser.add_argument("--sink", default="jsonl", choices=["jsonl", "pinecone"])
     parser.add_argument("--out", default="products.jsonl", help="Path for the jsonl sink")
-    parser.add_argument("--batch", type=int, default=25, help="URLs per Actor call")
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=8,
+        help="URLs per Actor call. Kept low because the whole call shares one "
+        "300s timeout: a slow retailer can take over 100s for a single product, "
+        "and a batch that times out loses every product in it.",
+    )
     args = parser.parse_args()
 
     if not args.catalog and not args.keyword:

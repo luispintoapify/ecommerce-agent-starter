@@ -94,32 +94,47 @@ python rag_refresh.py --catalog catalog.example.json --sink pinecone
 
 ## What comes back
 
-`apify_products.py` normalizes the Actor's output into one stable shape. That module is the part worth reading, because field names and types vary by retailer, and reading them naively works on Amazon and then breaks on the next store:
+`apify_products.py` normalizes the Actor's output into one stable shape. That module is the part worth reading, because field names and types vary by retailer, and reading them naively works on Amazon and then breaks on the next store.
 
-- `offers.price` arrives as a number on some retailers and a string like `"$328.00"` on others
-- the currency is `offers.priceCurrency` on some, `offers.currency` on others
-- the title is `name` or `title`
-- `brand` is an object with a `name`, or a bare string
-- images arrive as `image` (string or list) and `images` (list)
-- stock is `inStock` as a boolean, or an availability string
+These are measured against live runs on Amazon and Walmart, not guessed:
 
-Normalized:
+| Field | Amazon returned | Walmart returned |
+|---|---|---|
+| `offers.price` | `248` (number) | `"398.99"` (string) |
+| `offers.priceCurrency` | `"$"` (symbol) | `"USD"` (code) |
+| `brand` | `{"slogan": "Sony"}` | `{"slogan": "Visit the Sony Store"}` |
+| `inStock` / `availability` | both `null` | both `null` |
+| `rating` / `reviewCount` | `null` / `20002` | `0` / `0` |
+
+Also seen: the title is `name` or `title`, and images arrive as `image` (string or list) or `images` (list).
+
+Two of those rows are worth dwelling on.
+
+**`brand` is not reliably a brand.** The `slogan` slot carries whatever text the retailer put there. `apify_products.py` unwraps the "Visit the X Store" pattern and rejects anything still shaped like a phrase, because `Brand: Visit the Sony Store` embedded in a document an agent cites is worse than no brand at all.
+
+**`rating` and `reviewCount` are not exposed by this starter**, deliberately. Amazon reported 20,002 reviews with a `null` rating, and Walmart reported `0` and `0` for a product that plainly has reviews. Passing those through would put numbers in front of an agent that are wrong in both directions.
+
+Normalized, from a real Amazon run:
 
 ```python
 Product(
-    name="Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
+    name="Sony WH-1000XM5 Premium Noise Cancelling Wireless Headphones, Black",
     brand="Sony",
-    price=328.0,
-    currency="USD",
-    in_stock=True,
+    price=248.0,
+    currency="$",          # format_price() renders "$248"
+    in_stock=None,         # the retailer did not say
     images=["https://..."],
     url="https://www.amazon.com/dp/B09XS7JWHH",
     retailer="Amazon",
-    fetched_at="2026-08-11T18:42:00+00:00",
+    fetched_at="2026-08-17T08:17:07+00:00",
 )
 ```
 
-`in_stock` is deliberately tri-state. `None` means the retailer did not say, and collapsing that to `False` would tell an agent a product is unavailable when nobody claimed it. That is the class of confident wrong answer this repo exists to avoid.
+`in_stock` is deliberately tri-state, and the run above is exactly why. `None` means the retailer did not say. Collapsing that to `False` would tell an agent a product is unavailable when nobody claimed it, which is the class of confident wrong answer this repo exists to avoid.
+
+**Neither Amazon nor Walmart returned stock in testing.** Plan for `None` as the normal case and design the agent's answer around it, rather than treating stock as a field you can count on.
+
+`format_price()` handles the currency inconsistency: a symbol butts against the number, an ISO code takes a space, so both `$248` and `USD 398.99` read correctly.
 
 Rows with neither a name nor a price are dropped rather than indexed. An unrecognized page otherwise fills a vector store with blanks that an agent later cites as fact.
 
@@ -140,12 +155,26 @@ Without that, an agent will quote an indexed price as though it were live, which
 
 E-commerce Scraping Tool bills per event: a start event per call, plus per product pushed, plus residential proxy and browser rendering where a retailer needs them. Current rates are on the [Actor's pricing tab](https://apify.com/apify/e-commerce-scraping-tool/pricing). Two consequences for how you call it:
 
-- **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default; `--batch` controls the size.
+- **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default.
 - **Cap.** `--limit` is a hard cap the platform enforces, not a suggestion. Leave it set.
 
-On one recorded run, 175 products came back in 60 seconds for about $1, which is roughly half a cent per product. Throughput is good because the Actor routes to per-retailer Standby Actors that stay warm.
+On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. Throughput is good because the Actor routes to per-retailer Standby Actors that stay warm.
 
-**Single-product latency is not published yet.** The Actor itself does not run in Standby, so each call starts an orchestrator run, and a one-product call does not take a 175th of 60 seconds. If you are putting a runtime call inside a chat turn, measure it against your own retailers first and design the UX around what you measure.
+### Latency varies enormously by retailer
+
+Measured, one product at a time:
+
+| Call | Time |
+|---|---|
+| Amazon, one product by URL | **10.3s** |
+| Walmart, three products by keyword | **174.1s** |
+
+The Actor itself does not run in Standby, so every call starts an orchestrator run and a one-product call does not take a 175th of 60 seconds. Ten seconds is workable inside a considered interaction. Nearly three minutes is not, and it is not an outlier.
+
+Two consequences:
+
+- **Measure your own retailers before putting a runtime call in a chat turn.** Design the UX around what you measure, not around the Amazon number.
+- **`--batch` defaults to 8, not something larger.** The whole call shares one 300 second timeout, so a batch of 25 slow URLs times out and loses every product in it. Raise it only for retailers you have timed.
 
 ## Retailers
 
@@ -153,9 +182,13 @@ The Actor's `marketplaces` input lists 225 storefront entries across 79 retailer
 
 The current list is in the [Actor's input schema](https://apify.com/apify/e-commerce-scraping-tool/input-schema). For marketplaces outside this Actor's scope, [Apify Store](https://apify.com/store) has retailer-specific Actors that reach the same MCP server.
 
-### One known rough edge
+### When a URL comes back empty
 
-`detailsUrls` is the input field for individual product detail pages, and that is what both scripts use. Some retailers appear to return results only through `listingUrls`. If a URL comes back empty, retry with `--listing` on either script, and please open an issue with the retailer so it can be documented.
+`detailsUrls` is the input field for individual product detail pages, and it is confirmed working: an Amazon product URL returned a full record in 10.3s. Both scripts use it.
+
+A URL that does not resolve comes back as an item with **no fields at all**, not as an error. That was reproduced with a URL whose product ID did not exist: 118 seconds, one item, every field empty. The pipeline drops those rather than indexing them, and `runtime_call.py` says so plainly instead of printing a blank record.
+
+So if a URL comes back empty, check the URL itself first. `--listing` routes the same URLs through `listingUrls` if you want to rule the input field out, and an issue naming the retailer is welcome either way.
 
 ## Demo
 

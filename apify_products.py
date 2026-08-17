@@ -82,6 +82,23 @@ class Product:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    def format_price(self) -> str:
+        """Render the price with its currency.
+
+        The currency arrives as a symbol on some retailers and an ISO code on
+        others: Amazon returned ``"$"`` and Walmart returned ``"USD"`` for the
+        same dollar. A symbol butts against the number, a code takes a space,
+        so "$248" and "USD 398.99" both read correctly.
+        """
+        if self.price is None:
+            return ""
+        amount = f"{self.price:g}"
+        if not self.currency:
+            return amount
+        if self.currency.isalpha():
+            return f"{self.currency} {amount}"
+        return f"{self.currency}{amount}"
+
     def to_text(self) -> str:
         """A compact document for embedding.
 
@@ -95,8 +112,7 @@ class Product:
         if self.brand:
             bits.append(f"Brand: {self.brand}")
         if self.price is not None:
-            money = f"{self.currency} {self.price}".strip()
-            bits.append(f"Price: {money}")
+            bits.append(f"Price: {self.format_price()}")
         if self.in_stock is not None:
             bits.append("In stock" if self.in_stock else "Out of stock")
         elif self.availability:
@@ -130,13 +146,47 @@ def parse_price(raw: Any) -> Optional[float]:
     return None
 
 
+_BRAND_WRAPPER = re.compile(r"^visit\s+the\s+(.+?)\s+store$", re.IGNORECASE)
+
+
+def _clean_brand(value: str) -> str:
+    """Reduce a brand candidate to a name, or reject it.
+
+    ``brand.slogan`` carries whatever text the retailer put in that slot, which
+    is a clean brand on some and a UI string on others. Both observed live:
+    Amazon returned ``"Sony"``, Walmart returned ``"Visit the Sony Store"``.
+
+    So unwrap that pattern, then reject anything still shaped like a phrase. A
+    brand is a name. "Brand: Visit the Sony Store" embedded in a document an
+    agent cites is worse than no brand at all, because it reads as fact.
+    """
+    value = value.strip()
+    if not value:
+        return ""
+    wrapped = _BRAND_WRAPPER.match(value)
+    if wrapped:
+        value = wrapped.group(1).strip()
+    if len(value) > 40 or len(value.split()) > 4:
+        return ""
+    return value
+
+
 def read_brand(raw: Any) -> str:
+    """Read the brand from a string, or from an object under ``name`` or ``slogan``.
+
+    ``slogan`` is checked because a live Amazon product returned
+    ``{"slogan": "Sony"}`` with no ``name`` key at all, so reading only ``name``
+    dropped the brand on the most common retailer of all.
+    """
     if isinstance(raw, str):
-        return raw.strip()
+        return _clean_brand(raw)
     if isinstance(raw, dict):
-        name = raw.get("name")
-        if isinstance(name, str):
-            return name.strip()
+        for key in ("name", "slogan"):
+            value = raw.get(key)
+            if isinstance(value, str):
+                cleaned = _clean_brand(value)
+                if cleaned:
+                    return cleaned
     return ""
 
 
