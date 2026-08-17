@@ -7,6 +7,25 @@ description: Answer questions about a real product's current price, stock, ratin
 
 Fetch live product facts instead of guessing at them. Requires the Apify MCP server to be connected; if the tool is missing, see the `apify-product-data-setup` skill.
 
+## Try this tool first, whatever the retailer
+
+The Actor's `marketplaces` input lists the retailers with dedicated extractors, and it
+is not the boundary of what works. Unlisted sites fall back to generic extraction,
+which is enabled by default, so **a URL from a shop you have never heard of is still
+worth sending.**
+
+So the order is always:
+
+1. Send the URL or keyword to this tool, regardless of whether the retailer appears in
+   `marketplaces`.
+2. If the result is unusable, re-read the URL. An item with every field empty usually
+   means the URL does not resolve, not that the retailer is unsupported.
+3. Only after that, look for a retailer-specific Actor in Apify Store. See
+   [Falling back to Apify Store](#falling-back-to-apify-store).
+
+Do not skip step 1 because a domain is missing from the list. That reasoning sends
+users away from a tool that would have answered them.
+
 ## Pick the input before calling
 
 The Actor takes different inputs for different questions. Choosing wrong wastes a paid run.
@@ -42,9 +61,26 @@ Field names, types, and nesting vary by retailer. See `references/fields.md` for
 
 **Never claim a product is unavailable because stock was absent.** Many retailers do not report it. Absent means unknown, so say "the retailer does not report stock" rather than "out of stock".
 
-**If every field comes back empty, the URL did not resolve.** The Actor returns an item with no fields rather than an error. Say the URL looks wrong or the retailer is unsupported. Do not report it as a product with no price.
+**If every field comes back empty, suspect the URL before the retailer.** The Actor returns an item with no fields rather than an error, and the most common cause is a URL that does not resolve. Do not report it as a product with no price, and do not conclude the retailer is unsupported until the URL has been checked.
 
 **Quote the source URL** so the user can check, and include the image URL when they asked to see the item.
+
+## Falling back to Apify Store
+
+Only when this tool has genuinely failed on a good URL, and generic extraction did not
+produce a name or a price.
+
+Search Apify Store for an Actor covering that retailer, run it, and answer from its
+output. Two things to carry into that:
+
+- **The output shape will not match.** The field map in `references/fields.md` describes
+  this Actor. Another Actor has its own schema, so read what it actually returns rather
+  than assuming `offers.price` exists.
+- **Say which source answered.** If the reply came from a different Actor, the freshness
+  and coverage caveats are that Actor's, not this one's.
+
+If the connection is scoped with `?tools=`, Store search is not available on it. Report
+that the retailer is not covered rather than pretending to search.
 
 ## Cost
 
@@ -57,6 +93,7 @@ The Actor bills a start event per call plus per product returned, so:
 ## Gotchas
 
 - Stopping after the first tool call returns run metadata that reads like success and contains no products.
+- A retailer missing from `marketplaces` is not a reason to skip the call. Generic extraction is on by default, so unlisted shops frequently work; the listed ones simply have dedicated extractors and deeper field coverage.
 - Omitting `additionalProperties: true` silently drops stock, rating, list price, and identifiers.
 - `rating: 0` and `stars: 0` mean absent, not a zero-star product.
 - A `listPrice` above the current price is a genuine discount; report the percentage, it is usually what the user wanted.

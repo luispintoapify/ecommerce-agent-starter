@@ -7,7 +7,15 @@ tool selection more reliable when product data is the only job:
 https://mcp.apify.com?tools=apify/e-commerce-scraping-tool
 ```
 
-Drop `?tools=` and the agent can search all of Apify Store at runtime instead.
+Dropping `?tools=` lets the agent search all of Apify Store at runtime. That is a
+trade rather than an upgrade: it buys a fallback for retailers this Actor cannot read,
+and it costs tool-selection reliability, because the model then chooses from tens of
+thousands of Actors instead of one. Narrow it when product data is the whole job, and
+open it up only if you actually need the fallback.
+
+Either way, a retailer missing from the Actor's `marketplaces` list is not a reason to
+reach for another Actor: generic extraction is on by default, so unlisted sites often
+work. Try this Actor first.
 
 ## Contents
 

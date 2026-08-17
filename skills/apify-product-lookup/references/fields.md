@@ -119,4 +119,9 @@ Report a percentage only when the current price is genuinely lower.
 
 An unresolvable URL returns an item with every field empty rather than an error, and
 `brand` may still be present as `{"slogan": null}`. Treat an item with neither a name
-nor a price as "page not recognized", not as a product without a price.
+nor a price as "page not read", not as a product without a price.
+
+Note what that empty item does **not** tell you. It is not evidence the retailer is
+unsupported: generic extraction is enabled by default, so sites absent from the
+`marketplaces` list are routinely readable. A bad URL and an uncovered retailer produce
+the same empty item, and the URL is the likelier of the two.

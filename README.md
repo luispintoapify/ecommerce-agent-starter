@@ -197,7 +197,9 @@ Latency varies by retailer, so measure your own before putting a runtime call in
 
 ## Retailers
 
-The Actor's `marketplaces` input lists 225 storefront entries across 79 retailer brands, including Amazon, Walmart, Target, eBay, Best Buy, Home Depot, Lowe's, IKEA, Tesco, Mercado Libre, Idealo, and Kaufland. Field coverage is deepest on the major retailers, so check the fields you depend on before building on a smaller store. Other sites work through generic extraction with less reliable coverage.
+The Actor's `marketplaces` input lists 225 storefront entries across 79 retailer brands, including Amazon, Walmart, Target, eBay, Best Buy, Home Depot, Lowe's, IKEA, Tesco, Mercado Libre, Idealo, and Kaufland.
+
+**That list is not the boundary of what works.** It names the retailers with dedicated extractors. Sites outside it fall back to generic extraction, which is enabled by default, so a URL from an unlisted shop is worth trying. What the list buys you is depth: field coverage is best on the major retailers, so check the fields you depend on before building on a smaller store.
 
 The current list is in the [Actor's input schema](https://apify.com/apify/e-commerce-scraping-tool/input-schema). For marketplaces outside this Actor's scope, [Apify Store](https://apify.com/store) has retailer-specific Actors that reach the same MCP server.
 
