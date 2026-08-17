@@ -12,8 +12,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.10 is the floor: the official mcp SDK requires it.
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # 3.10 is the floor: the official mcp SDK requires it. 3.14 is included
+        # because it is where this was developed, and the version a maintainer
+        # runs is the worst one to leave untested.
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
