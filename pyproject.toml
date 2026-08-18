@@ -17,5 +17,7 @@ pinecone = ["openai>=1.40", "pinecone>=5.0"]
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# benchmark/tests guards the scoring rules, so CI has to run it too: rules that
+# drift toward one arm are exactly the failure a benchmark cannot afford.
+testpaths = ["tests", "benchmark/tests"]
 pythonpath = ["."]
