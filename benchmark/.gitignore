@@ -1,0 +1,4 @@
+# Results are produced by a run, not checked in. Publish a specific run's file
+# deliberately if you want it in the record, rather than letting it drift in.
+results.jsonl
+__pycache__/

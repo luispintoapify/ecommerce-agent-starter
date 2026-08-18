@@ -1,0 +1,4 @@
+# Arm B: native web search
+anthropic>=0.116
+# Arm C: the DIY scraper. Also needs `playwright install chromium`.
+playwright>=1.40
