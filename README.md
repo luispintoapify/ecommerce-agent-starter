@@ -194,9 +194,9 @@ E-commerce Scraping Tool bills per event: a start event per call, plus per produ
 - **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default.
 - **Cap.** `--limit` is a hard cap the platform enforces, not a suggestion. Leave it set.
 
-On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. Two single-product runs each billed $0.0026, which is the shape of the pricing: the start event dominates when you fetch one item, so batching is where the saving is. A single Amazon product came back in about 10 seconds, and the MCP path adds the fetch call on top of that.
+On one recorded run, 175 products across Amazon and eBay came back in 30 seconds, billing about $0.29. That is under a fifth of a cent per product. Two single-product runs each billed $0.0026, which is the shape of the pricing: the start event dominates when you fetch one item, so batching is where the saving is. A single Amazon product came back in about 10 seconds, and the MCP path adds the fetch call on top of that.
 
-Latency varies by retailer and between calls on the same URL: that same Amazon product took 40 seconds on a later run. Measure your own before putting a runtime call inside a chat turn, and design the UX around the slow case rather than the fast one. `--batch` defaults to 8 for the same reason: the whole call shares one 300 second timeout, so a large batch of slow URLs times out and loses every product in it.
+`--batch` defaults to 8 because the whole call shares one 300 second timeout, so a large batch of slow URLs times out and loses every product in it.
 
 ## Retailers
 
@@ -266,6 +266,8 @@ the business has to honor, so most of it is about what not to claim.
 [`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
 
 ## Demo
+
+A recorded run, replayed: [Running Shoes in 29.6s](https://claude.ai/code/artifact/a9fb57d3-8ea7-40c7-8383-ae618f511509). One keyword, two retailers, 175 typed records, and a panel showing which fields each retailer actually returned. Every value is verbatim from run `5MktQElgZgf9cIina`.
 
 <!-- TODO: embed the 60 to 90 second demo clip once it is recorded. -->
 
