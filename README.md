@@ -243,6 +243,24 @@ python3 path/to/skill-creator/scripts/package_skill.py skills/apify-product-look
 The setup skill's `references/clients.md` has the config for Claude Desktop, Claude
 Code, Cursor, n8n, and a Python example using the official SDK.
 
+## Prompt library
+
+If you are writing the agent's instructions yourself rather than installing a skill,
+[`prompts/`](prompts/) has two copy-paste system prompts:
+
+| Prompt | The agent's job |
+|---|---|
+| [`shopping-agent.md`](prompts/shopping-agent.md) | Recommend, compare, and quote prices the user will act on |
+| [`support-agent.md`](prompts/support-agent.md) | Answer for a business: specs, availability, delivery, price matching |
+
+Both end with worked examples chosen to fail loudly when a prompt is not landing: a
+lookup that catches an agent stopping before the products arrive, a comparison that
+catches a missing cost cap, and a listing with no stock field that catches an agent
+turning "not reported" into "out of stock".
+
+The support prompt is the longer of the two, because a support answer becomes a promise
+the business has to honor, so most of it is about what not to claim.
+
 ## Scheduling
 
 [`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
