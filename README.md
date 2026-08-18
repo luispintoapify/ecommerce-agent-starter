@@ -59,10 +59,11 @@ Any MCP client that speaks Streamable HTTP works against the same URL. SSE was r
 
 ## What the MCP flow actually looks like
 
-Worth knowing before you design a prompt around it: **fetching products is two tool calls, not one.**
+Worth knowing before you design a prompt around it: **fetching products takes more than one tool call.**
 
 1. Call `apify--e-commerce-scraping-tool`. Note the two hyphens where the Actor id uses a slash. It returns run metadata (`runId`, status, stats, and the id of the dataset it wrote) plus a text block telling the caller to fetch the items separately. **No products.**
-2. Call `get-dataset-items` with that `datasetId`. The products come back here.
+2. Check the status. The Actor tool returns when its own wait window elapses, not when the run finishes, so `RUNNING` is a normal answer with an empty dataset behind it. Poll `get-actor-run` with the `runId` until the status is terminal. Same URL, two runs: `SUCCEEDED` in 10 seconds on one, still `RUNNING` at 40 on the other.
+3. Call `get-dataset-items` with that `datasetId`. The products come back here.
 
 That is why the server exposes helper tools alongside the Actor even when the URL narrows the list:
 
@@ -71,7 +72,9 @@ get-actor-run, get-dataset-items, get-key-value-store-record,
 abort-actor-run, apify--e-commerce-scraping-tool
 ```
 
-`mcp_client.py` implements both calls. If you are writing your own agent prompt, make sure it knows to follow through on the second one.
+`mcp_client.py` implements all three steps. If you are writing your own agent prompt, make sure it knows to poll before fetching. An agent that stops at step 1 reports success with no data, and one that skips step 2 fetches an empty dataset and says the product was not found.
+
+`get-dataset-items` also takes a `fields` parameter, worth reaching for in a chat turn: one Amazon product is roughly 88 KB across 142 fields, most of it marketing and review text. Note that projecting flattens the response into dotted keys such as `offers.price`, so `normalize()` in this repo needs the unprojected shape.
 
 ## Run the scripts
 
@@ -191,9 +194,9 @@ E-commerce Scraping Tool bills per event: a start event per call, plus per produ
 - **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default.
 - **Cap.** `--limit` is a hard cap the platform enforces, not a suggestion. Leave it set.
 
-On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. A single Amazon product came back in about 10 seconds, and the MCP path adds the second call on top of that.
+On one recorded run, 175 products came back in 60 seconds for about $1, roughly half a cent per product. Two single-product runs each billed $0.0026, which is the shape of the pricing: the start event dominates when you fetch one item, so batching is where the saving is. A single Amazon product came back in about 10 seconds, and the MCP path adds the fetch call on top of that.
 
-Latency varies by retailer, so measure your own before putting a runtime call inside a chat turn, and design the UX around what you measure. `--batch` defaults to 8 for the same reason: the whole call shares one 300 second timeout, so a large batch of slow URLs times out and loses every product in it.
+Latency varies by retailer and between calls on the same URL: that same Amazon product took 40 seconds on a later run. Measure your own before putting a runtime call inside a chat turn, and design the UX around the slow case rather than the fast one. `--batch` defaults to 8 for the same reason: the whole call shares one 300 second timeout, so a large batch of slow URLs times out and loses every product in it.
 
 ## Retailers
 

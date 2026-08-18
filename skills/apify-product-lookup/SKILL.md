@@ -39,12 +39,27 @@ The Actor takes different inputs for different questions. Choosing wrong wastes 
 
 Always send `maxProductResults` and `additionalProperties: true`. Without the second, stock and rating are missing entirely, because they are nested there.
 
-## The call is two tool calls
+## The call is two steps, sometimes three
 
 1. Call `apify--e-commerce-scraping-tool` (two hyphens, not a slash). It returns run metadata and a `datasetId`. **It does not return products.**
-2. Call `get-dataset-items` with that `datasetId` and a `limit`. The products come back here.
+2. **Check `status`.** If it is not `SUCCEEDED`, call `get-actor-run` with the `runId` and a `waitSecs` until it is. The Actor tool returns when its own wait window elapses, not when the run finishes, so `RUNNING` is normal and the dataset holds nothing at that point.
+3. Call `get-dataset-items` with the `datasetId`, a `limit`, and `fields` (see below).
 
-Stopping after the first call is the most common failure. The first result looks successful and contains no product data.
+Two failures live here. Stopping after step 1 returns a result that reads like success and holds no product data. Skipping step 2 fetches an empty dataset and reports the product as not found.
+
+## Always project with fields
+
+The full record is large: one Amazon product measured about 88 KB across 142 fields, most of it marketing content and review text. Fetching all of it spends context on data no answer needs.
+
+Pass `fields` in dot notation, naming only what the question needs:
+
+```
+name,url,offers.price,offers.priceCurrency,brand.slogan,reviewCount,
+additionalProperties.inStock,additionalProperties.inStockText,
+additionalProperties.stars,additionalProperties.listPrice.value
+```
+
+**Projected output is flattened.** Keys come back as literal dotted strings, so it is `item["offers.price"]`, not `item["offers"]["price"]`. The nesting in `references/fields.md` describes unprojected output. Reading a nested path against a projected response finds nothing and looks exactly like missing data.
 
 ## Read the fields defensively
 
@@ -93,10 +108,12 @@ The Actor bills a start event per call plus per product returned, so:
 ## Gotchas
 
 - Stopping after the first tool call returns run metadata that reads like success and contains no products.
+- A `RUNNING` status is not an error and not a reason to retry the Actor. Poll `get-actor-run`; starting a second run doubles the cost and answers no faster.
+- Projecting with `fields` flattens the response into dotted keys. Reading the nested path then finds nothing, which is indistinguishable from the retailer not reporting the field.
+- Timing is not stable. The same Amazon URL returned in 10 seconds on one call and 40 on the next, and other retailers are slower still. Treat any single measurement as a sample, warn the user before a multi-retailer comparison, and never read slowness as failure.
 - A retailer missing from `marketplaces` is not a reason to skip the call. Generic extraction is on by default, so unlisted shops frequently work. The listed ones have dedicated extractors and deeper field coverage.
 - Omitting `additionalProperties: true` silently drops stock, rating, list price, and identifiers.
 - `rating: 0` and `stars: 0` mean absent, not a zero-star product.
 - A `listPrice` above the current price is a genuine discount; report the percentage, it is usually what the user wanted.
-- One Amazon product came back in about 10 seconds. Other retailers are slower by a wide margin, so for a multi-retailer comparison tell the user it will take a moment rather than going silent.
 - `additionalProperties` can run to roughly 100 KB per product. Never paste it into a reply; read the fields you need.
 - The `?tools=` parameter on the server URL narrows which Actors are visible. If the tool is absent, the connection may be scoped to other Actors.

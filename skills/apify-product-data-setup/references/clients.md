@@ -134,8 +134,9 @@ get-key-value-store-record
 abort-actor-run
 ```
 
-The helper tools arrive even when `?tools=` narrows the list, because fetching results
-requires the second call.
+The helper tools arrive even when `?tools=` narrows the list, because the Actor tool
+alone cannot deliver products: `get-actor-run` waits for the run to finish and
+`get-dataset-items` reads the output.
 
 ### Gotcha
 

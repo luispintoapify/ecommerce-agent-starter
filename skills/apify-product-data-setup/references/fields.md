@@ -10,6 +10,7 @@ that handles only one breaks on the other retailer.
 - [Inside additionalProperties](#inside-additionalproperties)
 - [Per-retailer differences](#per-retailer-differences)
 - [Reading each field safely](#reading-each-field-safely)
+- [Projecting with fields flattens all of this](#projecting-with-fields-flattens-all-of-this)
 
 ## Top level
 
@@ -125,3 +126,43 @@ Note what that empty item does **not** tell you. It is not evidence the retailer
 unsupported: generic extraction is enabled by default, so sites absent from the
 `marketplaces` list are routinely readable. A bad URL and an uncovered retailer produce
 the same empty item, and the URL is the likelier of the two.
+
+## Projecting with fields flattens all of this
+
+Everything above describes the **unprojected** record: nested objects, read with
+`item["offers"]["price"]`.
+
+The full record is big. One Amazon product measured about 88 KB across 142 fields, most
+of it marketing copy and review text, and the MCP server warns that fetching all of it
+may exceed the context window. So `get-dataset-items` takes a `fields` parameter, and
+you should almost always pass it:
+
+```
+name,url,offers.price,offers.priceCurrency,brand.slogan,reviewCount,
+additionalProperties.inStock,additionalProperties.inStockText,
+additionalProperties.stars,additionalProperties.listPrice.value
+```
+
+**The response comes back flat.** The dots stay in the key names rather than becoming
+nesting:
+
+```json
+{
+  "name": "Sony WH-1000XM5...",
+  "offers.price": 248,
+  "brand.slogan": "Sony",
+  "additionalProperties.inStock": true
+}
+```
+
+Two consequences:
+
+- An agent reading a projected response uses `item["offers.price"]`. Walking the nested
+  path finds nothing, which is indistinguishable from the retailer not reporting the
+  field, so the agent says "no price available" about a product whose price it fetched.
+- Code written against the nested shape, including `normalize()` in this repo, needs the
+  unprojected response. Fetch without `fields` when a normalizer will read the output,
+  and cap the row count instead.
+
+Pick one and be consistent: `fields` for an agent answering a question in a chat turn,
+no `fields` for a pipeline that normalizes and stores.

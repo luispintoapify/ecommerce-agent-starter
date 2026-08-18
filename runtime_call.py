@@ -1,7 +1,8 @@
 """The runtime path: fetch live product data over MCP, the way an agent does.
 
 This goes through the Apify MCP server, so what you see here is what your agent
-sees. It is two tool calls under the hood; ``mcp_client.py`` explains why.
+sees. It takes two tool calls under the hood, sometimes three; ``mcp_client.py``
+explains why.
 
 Use this when the answer has to be true right now, for a handful of products. For
 a catalog, use ``rag_refresh.py``: the Actor bills a start event per call plus per

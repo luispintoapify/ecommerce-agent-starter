@@ -3,14 +3,23 @@
 This is the path the repo is about. An agent connected to ``mcp.apify.com`` does
 exactly what happens below, so reading this tells you what your agent is doing.
 
-**The flow is two tool calls, not one.** Calling the Actor's tool returns run
-metadata (``runId``, status, stats, and the id of the dataset it wrote) plus a
-text block telling the caller to fetch the items separately. The products come
-back from a second call to ``get-dataset-items``. That is worth knowing before you
-design a prompt around a single tool call.
+**The flow is two calls, and sometimes three.** Calling the Actor's tool returns run
+metadata (``runId``, status, and the id of the dataset it wrote) plus a text block
+telling the caller to fetch the items separately. The products come back from a
+separate call to ``get-dataset-items``.
+
+The third call is the one that catches people. The Actor tool returns when its own
+wait window elapses, not when the run finishes, so ``status`` can come back
+``RUNNING`` with a dataset that exists and holds nothing. Observed live: the same
+product URL returned ``SUCCEEDED`` in 10 seconds on one call and ``RUNNING`` on
+another that took 40 seconds to finish. Poll ``get-actor-run`` until the status is
+terminal before fetching, or the fetch quietly returns an empty list.
+
+``get-actor-run`` returns the same ``storages.datasets.default.id`` shape as the
+Actor tool, so the polled metadata is a drop-in replacement for it.
 
 The server exposes helper tools alongside the Actor even when the URL narrows the
-tool list, precisely because the second call is required:
+tool list, precisely because the Actor tool alone cannot deliver products:
 
     get-actor-run, get-dataset-items, get-key-value-store-record,
     abort-actor-run, apify--e-commerce-scraping-tool
@@ -30,6 +39,15 @@ from typing import Any
 from apify_products import MCP_TOOL_NAME, MCP_URL, Product, api_token, normalize_all
 
 DATASET_TOOL = "get-dataset-items"
+RUN_TOOL = "get-actor-run"
+
+#: Statuses that mean the run has stopped, successfully or otherwise.
+TERMINAL = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT", "TIMED_OUT"}
+
+#: How many times to poll before giving up. Each poll blocks server-side for
+#: ``POLL_WAIT_SECS``, so this is roughly the patience in seconds divided by that.
+MAX_POLLS = 10
+POLL_WAIT_SECS = 30
 
 
 class McpError(RuntimeError):
@@ -104,6 +122,35 @@ async def fetch_products(
                 if not isinstance(meta, dict):
                     raise McpError("Could not parse the Actor tool result as JSON.")
 
+                # The Actor tool returns when its wait window elapses, not when the
+                # run ends, so poll before fetching. Skipping this returns an empty
+                # list from a dataset that simply has not been written yet.
+                polls = 0
+                while str(meta.get("status", "")).upper() not in TERMINAL:
+                    if polls >= MAX_POLLS:
+                        raise McpError(
+                            f"Run {meta.get('runId')} was still "
+                            f"{meta.get('status')} after {polls} polls. It may still "
+                            "finish; check the run in Apify Console."
+                        )
+                    polls += 1
+                    polled = await session.call_tool(
+                        RUN_TOOL,
+                        {"runId": meta.get("runId"), "waitSecs": POLL_WAIT_SECS},
+                    )
+                    if polled.is_error:
+                        raise McpError(f"{RUN_TOOL} failed: {_error_text(polled)}")
+                    updated = _first_json_block(polled)
+                    if not isinstance(updated, dict):
+                        raise McpError(f"Could not parse the {RUN_TOOL} result as JSON.")
+                    meta = updated
+
+                if str(meta.get("status", "")).upper() != "SUCCEEDED":
+                    raise McpError(
+                        f"Run finished as {meta.get('status')}, so there is no output "
+                        "to read."
+                    )
+
                 dataset_id = _dataset_id(meta)
                 fetched = await session.call_tool(
                     DATASET_TOOL, {"datasetId": dataset_id, "limit": limit}
@@ -129,10 +176,11 @@ def _error_text(result: Any) -> str:
 def run_summary(meta: dict[str, Any]) -> str:
     """One line about the run, for printing next to the results.
 
-    Deliberately does not report the dataset's ``itemCount``. That number is not
-    settled when the tool call returns: a run that produced one product reported
-    ``itemCount: 0`` here while ``get-dataset-items`` then returned the product.
-    Count what actually came back instead.
+    Deliberately does not report the dataset's ``itemCount``. It is only meaningful
+    once the run is terminal: a run still ``RUNNING`` reported ``itemCount: 0`` for a
+    dataset that ended up holding a product. Since ``fetch_products`` polls to
+    ``SUCCEEDED`` the number would be correct here, but counting what actually came
+    back stays right even if the caller changes the flow.
     """
     stats = meta.get("stats") or {}
     seconds = stats.get("runTimeSecs")
