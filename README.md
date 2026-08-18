@@ -261,6 +261,19 @@ turning "not reported" into "out of stock".
 The support prompt is the longer of the two, because a support answer becomes a promise
 the business has to honor, so most of it is about what not to claim.
 
+## Benchmark
+
+[`benchmark/`](benchmark/) holds a three-arm comparison: this Actor over MCP, a model with native web search, and a DIY Playwright scraper, over twenty frozen product questions.
+
+```bash
+pip install -r benchmark/requirements-bench.txt
+python benchmark/run.py --arms apify,browsing,diy && python benchmark/score.py
+```
+
+We wrote it and we sell one of the arms, so the credibility rests on three things you can check rather than on our word: the questions were committed **before any arm existed** (check the git history), the scorer only grades objectively true or false properties, and 23 tests pin the scoring rules so they cannot drift toward one arm.
+
+It scores whether an answer is **actionable and checkable** (a price, a resolvable link to the product actually asked about, a respected budget, honesty about withheld fields) and deliberately does not claim to adjudicate absolute price truth. Where two arms disagree on a price, it flags the case for a human instead of picking a winner. [`benchmark/README.md`](benchmark/README.md) explains what it measures and what it refuses to.
+
 ## Scheduling
 
 [`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
