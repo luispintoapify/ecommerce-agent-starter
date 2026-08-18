@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "frozen": "2026-08-18",
+  "note": "Frozen before any arm was run. Do not edit to fit results. Add a v1.1 file instead and say why.",
+  "questions": [
+    {"id": "q01", "type": "price",      "text": "How much do the ASICS Men's Gel-Cumulus 27 running shoes cost right now on Amazon?", "expect_id": "B0F643TQ4W", "url": "https://www.amazon.com/dp/B0F643TQ4W"},
+    {"id": "q02", "type": "price",      "text": "What is the current price of the Brooks Women's Ghost Max 3 on Amazon?", "expect_id": "B0DM3448NM", "url": "https://www.amazon.com/dp/B0DM3448NM"},
+    {"id": "q03", "type": "price",      "text": "What does this cost today? https://www.amazon.com/dp/B0DT1KPWHP", "expect_id": "B0DT1KPWHP", "url": "https://www.amazon.com/dp/B0DT1KPWHP"},
+    {"id": "q04", "type": "price",      "text": "Price check on the New Balance Fresh Foam Arishi V4, Amazon US.", "expect_id": "B09H3NKN4C", "url": "https://www.amazon.com/dp/B09H3NKN4C"},
+    {"id": "q05", "type": "stock",      "text": "Is the Sony WH-1000XM5 in stock on Amazon right now, and at what price?", "expect_id": "B09XS7JWHH", "url": "https://www.amazon.com/dp/B09XS7JWHH"},
+    {"id": "q06", "type": "stock",      "text": "Can I buy the Nike Air Monarch IV on Amazon today? https://www.amazon.com/dp/B004LBKDY2", "expect_id": "B004LBKDY2", "url": "https://www.amazon.com/dp/B004LBKDY2"},
+    {"id": "q07", "type": "stock",      "text": "Is this listing still available and what is the price? https://www.amazon.com/dp/B0DM3LQZYP", "expect_id": "B0DM3LQZYP", "url": "https://www.amazon.com/dp/B0DM3LQZYP"},
+    {"id": "q08", "type": "discount",   "text": "Are the Under Armour Charged Assert 10 actually discounted on Amazon, or is that the list price? https://www.amazon.com/dp/B09XBW67D5", "expect_id": "B09XBW67D5", "url": "https://www.amazon.com/dp/B09XBW67D5"},
+    {"id": "q09", "type": "discount",   "text": "How big is the discount on the Brooks Men's Revel 8 on Amazon right now?", "expect_id": "B0DM3PT77G", "url": "https://www.amazon.com/dp/B0DM3PT77G"},
+    {"id": "q10", "type": "discount",   "text": "Is the UMYOGO running shoe on Amazon on sale? https://www.amazon.com/dp/B07WC8T8MR", "expect_id": "B07WC8T8MR", "url": "https://www.amazon.com/dp/B07WC8T8MR"},
+    {"id": "q11", "type": "rating",     "text": "What is the customer rating and review count for the ASICS Women's Gel-Cumulus 27 on Amazon?", "expect_id": "B0D3XR1QZ4", "url": "https://www.amazon.com/dp/B0D3XR1QZ4"},
+    {"id": "q12", "type": "rating",     "text": "How well reviewed is the Under Armour Charged Assert 9 on Amazon? https://www.amazon.com/dp/B087TQBBXD", "expect_id": "B087TQBBXD", "url": "https://www.amazon.com/dp/B087TQBBXD"},
+    {"id": "q13", "type": "rating",     "text": "Rating for the PB5star Court2 pickleball shoe on Amazon, and its price.", "expect_id": "B0FMT4526V", "url": "https://www.amazon.com/dp/B0FMT4526V"},
+    {"id": "q14", "type": "price",      "text": "What is the Brooks Anthem 8 selling for on Amazon? https://www.amazon.com/dp/B0F4JJFZQK", "expect_id": "B0F4JJFZQK", "url": "https://www.amazon.com/dp/B0F4JJFZQK"},
+    {"id": "q15", "type": "compare",    "text": "Compare running shoe prices between Amazon and eBay. Give me three examples from each with prices.", "keyword": "running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"]},
+    {"id": "q16", "type": "compare",    "text": "Which is cheaper for Hoka running shoes right now, Amazon or eBay?", "keyword": "hoka running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"]},
+    {"id": "q17", "type": "constraint", "text": "Find me running shoes under $50 that are available right now. Give the price and where.", "keyword": "running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"], "max_price": 50},
+    {"id": "q18", "type": "constraint", "text": "I want New Balance running shoes under $120. What is available and at what price?", "keyword": "new balance running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"], "max_price": 120},
+    {"id": "q19", "type": "constraint", "text": "Show me trail running shoes between $80 and $150 with a price and a link.", "keyword": "trail running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"], "min_price": 80, "max_price": 150},
+    {"id": "q20", "type": "compare",    "text": "What is the price spread on Brooks running shoes across Amazon and eBay today, cheapest to most expensive?", "keyword": "brooks running shoes", "marketplaces": ["www.amazon.com", "www.ebay.com"]}
+  ]
+}
