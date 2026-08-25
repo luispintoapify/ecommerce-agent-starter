@@ -1,6 +1,9 @@
 ---
 name: apify-product-lookup
-description: Answer questions about a real product's current price, stock, rating, specs, or images by calling Apify's E-commerce Scraping Tool over MCP, across Amazon, Walmart, Target, eBay, and 75 more retailers. Trigger on "what does X cost right now", "is X in stock", "compare the price of X across stores", "find me a Y under $Z", "how much is this", "check this product URL", or any product question where a stale answer would be wrong. Use whenever answering from training data or a web search would risk quoting an out-of-date price.
+description: Answer questions about a real product's current price, stock, rating, specs, or images by calling Apify's E-commerce Scraping Tool over MCP, across Amazon, Walmart, Target, eBay, and many more retailers. Trigger on "what does X cost right now", "is X in stock", "compare the price of X across stores", "find me a Y under $Z", "how much is this", "check this product URL", or any product question where a stale answer would be wrong. Use whenever answering from training data or a web search would risk quoting an out-of-date price.
+metadata:
+  category: data-extraction
+  keywords: "product price, live price check, stock availability, price comparison, product rating, retail product data, amazon price, ebay price, e-commerce lookup"
 ---
 
 # Apify product lookup
@@ -25,6 +28,22 @@ So the order is always:
 
 Do not skip step 1 because a domain is missing from the list. That reasoning sends
 users away from a tool that would have answered them.
+
+## When a marketplace is not in the list
+
+Over MCP the `marketplaces` enum arrives **truncated**, because the server caps how much
+of a long enum it passes through. Some real, supported retailers are therefore missing
+from the list you can choose from, and passing one anyway returns a validation error
+before the run starts.
+
+**That error does not mean the retailer is unsupported.** It means you cannot name it in
+a keyword search on this connection. Two ways through:
+
+1. **If you have the product URL, use `detailsUrls`.** It takes arbitrary URLs and is
+   unaffected by the enum, so the retailer works normally.
+2. **If you only have a keyword**, run it on the marketplaces you can select and say
+   plainly which retailer you could not include. Do not report the retailer as
+   unsupported.
 
 ## Pick the input before calling
 
@@ -111,6 +130,7 @@ The Actor bills a start event per call plus per product returned, so:
 - A `RUNNING` status is not an error and not a reason to retry the Actor. Poll `get-actor-run`; starting a second run doubles the cost and answers no faster.
 - Projecting with `fields` flattens the response into dotted keys. Reading the nested path then finds nothing, which is indistinguishable from the retailer not reporting the field.
 - Timing is not stable. The same Amazon URL returned in 10 seconds on one call and 40 on the next, and other retailers are slower still. Treat any single measurement as a sample, warn the user before a multi-retailer comparison, and never read slowness as failure.
+- A validation error naming `marketplaces` means the enum is truncated on this connection, not that the retailer is unsupported. Use `detailsUrls` with the product URL instead.
 - A retailer missing from `marketplaces` is not a reason to skip the call. Generic extraction is on by default, so unlisted shops frequently work. The listed ones have dedicated extractors and deeper field coverage.
 - Omitting `additionalProperties: true` silently drops stock, rating, list price, and identifiers.
 - `rating: 0` and `stars: 0` mean absent, not a zero-star product.

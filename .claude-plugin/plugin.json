@@ -1,0 +1,21 @@
+{
+  "name": "ecommerce-agent-starter",
+  "version": "0.1.0",
+  "description": "Give an AI agent live product data: price, stock, rating, and images from retailer pages, over the Apify MCP server. Two skills, a field map built from live runs, and copy-paste system prompts.",
+  "author": {
+    "name": "Luís Pinto",
+    "email": "luis.pinto@apify.com"
+  },
+  "homepage": "https://github.com/luispintoapify/ecommerce-agent-starter",
+  "repository": "https://github.com/luispintoapify/ecommerce-agent-starter",
+  "license": "MIT",
+  "keywords": [
+    "apify",
+    "mcp",
+    "ecommerce",
+    "product-data",
+    "price-monitoring",
+    "agent-skills",
+    "data-extraction"
+  ]
+}

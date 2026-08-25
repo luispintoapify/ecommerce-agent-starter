@@ -1,11 +1,14 @@
 ---
 name: apify-product-data-setup
 description: Wire an AI agent to live e-commerce product data using Apify's E-commerce Scraping Tool over MCP, either as runtime tool calls or as a scheduled refresh into a vector store. Trigger on "give my agent live product data", "my agent quotes stale prices", "connect Apify MCP to Claude or Cursor or n8n", "add product data to my RAG pipeline", "keep my product catalog fresh", "set up a shopping agent", or any request to stop an agent answering product questions from training data. Use for the integration work; use apify-product-lookup to actually answer a product question.
+metadata:
+  category: data-extraction
+  keywords: "mcp setup, agent product data, claude mcp config, cursor mcp, n8n product data, rag product catalog, vector store refresh, scheduled scraping"
 ---
 
 # Apify product data setup
 
-Connect an agent to current product data: price, stock, brand, rating, and image URLs from 79 retailer brands. Nothing to host.
+Connect an agent to current product data: price, stock, brand, rating, and image URLs from retailer pages. Nothing to host.
 
 ## Choose the path first
 

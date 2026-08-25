@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "apify-ecommerce": {
+      "url": "https://mcp.apify.com?tools=apify/e-commerce-scraping-tool"
+    }
+  }
+}

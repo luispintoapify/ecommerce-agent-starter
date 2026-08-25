@@ -1,6 +1,6 @@
 # ecommerce-agent-starter
 
-Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp): current price, stock, brand, rating, and image URLs from Amazon, Walmart, Target, eBay, and 75 more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
+Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp): current price, stock, brand, rating, and image URLs from Amazon, Walmart, Target, eBay, and many more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
 
 A language model answers product questions from training data that was fixed months ago, or from browsing that reads a page as prose with no product fields. Neither gives you a price you can rely on today. This starter wires an agent to the real thing, as structured fields it can compare, filter, and act on.
 
@@ -200,7 +200,9 @@ On one recorded run, 175 products across Amazon and eBay came back in 30 seconds
 
 ## Retailers
 
-The Actor's `marketplaces` input lists 225 storefront entries across 79 retailer brands, including Amazon, Walmart, Target, eBay, Best Buy, Home Depot, Lowe's, IKEA, Tesco, Mercado Libre, Idealo, and Kaufland.
+The Actor's `marketplaces` input lists storefronts with dedicated extractors, including Amazon, Walmart, Target, eBay, Best Buy, Home Depot, Lowe's, IKEA, Tesco, Mercado Libre, Idealo, and Kaufland.
+
+**Over MCP that list arrives truncated.** The server caps how many characters of a long enum it passes through, so some supported retailers are missing from what an agent can select, and passing one anyway is a validation error before the run starts. It does not mean the retailer is unsupported: `detailsUrls` takes arbitrary URLs and is unaffected. Use it when the marketplace you want is not selectable.
 
 **That list is not the boundary of what works.** It names the retailers with dedicated extractors. Sites outside it fall back to generic extraction, which is enabled by default, so a URL from an unlisted shop is worth trying. What the list buys you is depth: field coverage is best on the major retailers, so check the fields you depend on before building on a smaller store.
 
