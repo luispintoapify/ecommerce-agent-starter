@@ -292,3 +292,34 @@ def test_rest_and_mcp_normalize_identically(amazon, amazon_mcp):
     assert a["in_stock"] == b["in_stock"]
     assert a["rating"] == b["rating"]
     assert a["identifier"] == b["identifier"]
+
+
+# --- eBay's link text in the product name -----------------------------------
+
+def test_strips_ebay_link_text_from_name():
+    """Every eBay record arrives with this appended. Left in, it lands in a card
+    or a cited document as though it were part of the product's name."""
+    p = normalize({"name": "Saucony Women Cohesion 18Opens in a new window or tab"}, FETCHED)
+    assert p.name == "Saucony Women Cohesion 18"
+
+
+def test_strips_suffix_with_a_space_before_it():
+    p = normalize({"name": "Nike Pegasus 41 Opens in a new window or tab"}, FETCHED)
+    assert p.name == "Nike Pegasus 41"
+
+
+def test_strips_suffix_and_the_separator_left_behind():
+    p = normalize({"title": "Brooks Revel 8 - Opens in a new tab"}, FETCHED)
+    assert p.name == "Brooks Revel 8"
+
+
+def test_leaves_a_clean_name_alone():
+    p = normalize({"name": "ASICS Men's Gel-Cumulus 27"}, FETCHED)
+    assert p.name == "ASICS Men's Gel-Cumulus 27"
+
+
+def test_a_name_that_merely_contains_the_phrase_is_untouched():
+    """Only a suffix is stripped. A product genuinely named after the phrase, or
+    one where it appears mid-string, must survive."""
+    p = normalize({"name": "Opens in a new window or tab sticker pack"}, FETCHED)
+    assert p.name == "Opens in a new window or tab sticker pack"

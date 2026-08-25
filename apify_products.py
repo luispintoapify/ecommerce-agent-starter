@@ -218,6 +218,27 @@ def _clean_brand(value: str) -> str:
     return value
 
 
+#: Link text some retailers append to the product name in the DOM. eBay puts
+#: "Opens in a new window or tab" on every one of its records, so the raw name is
+#: unusable in a citation or a card. Same class of problem as ``brand.slogan``
+#: carrying "Visit the Sony Store": page furniture arriving as data.
+NAME_SUFFIXES = (
+    "opens in a new window or tab",
+    "opens in a new tab",
+)
+
+
+def read_name(item: dict[str, Any]) -> str:
+    """The product name with scraped UI text stripped off the end."""
+    raw = str(item.get("name") or item.get("title") or "").strip()
+    low = raw.lower()
+    for suffix in NAME_SUFFIXES:
+        if low.endswith(suffix):
+            raw = raw[: len(raw) - len(suffix)].strip()
+            low = raw.lower()
+    return raw.strip(" -|\u2013")
+
+
 def read_brand(raw: Any) -> str:
     if isinstance(raw, str):
         return _clean_brand(raw)
@@ -384,7 +405,7 @@ def normalize(item: dict[str, Any], fetched_at: str, fallback_url: str = "") -> 
     )
 
     return Product(
-        name=str(item.get("name") or item.get("title") or "").strip(),
+        name=read_name(item),
         brand=read_brand(item.get("brand")),
         description=str(item.get("description") or "").strip(),
         price=parse_price(offers.get("price")),

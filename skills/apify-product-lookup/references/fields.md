@@ -1,8 +1,8 @@
 # Field map for E-commerce Scraping Tool output
 
-Every shape below was observed in live runs against Amazon and Walmart, not inferred
-from documentation. Where the two disagree, both forms are listed, because a reader
-that handles only one breaks on the other retailer.
+Every shape below was observed in live runs against Amazon, Walmart, and eBay, not
+inferred from documentation. Where they disagree, every form is listed, because a reader
+that handles only one breaks on the next retailer.
 
 ## Contents
 
@@ -16,14 +16,16 @@ that handles only one breaks on the other retailer.
 
 | Field | Type seen | Notes |
 |---|---|---|
-| `name` | string | Sometimes `title` instead |
+| `name` | string | Sometimes `title` instead. **eBay appends `Opens in a new window or tab` to every one**, see the gotcha below |
 | `description` | string | Long, often over 1,000 characters |
 | `url` | string | Canonical product URL |
 | `inputUrl` | string | What was submitted, useful when `url` is absent |
 | `image` | string or list | Single URL or a list |
 | `offers` | object | Never an array in practice |
-| `offers.price` | number or string | `248` on Amazon, `"398.99"` on Walmart |
-| `offers.priceCurrency` | string | `"$"` on Amazon, `"USD"` on Walmart |
+| `offers.price` | number or string | `248` on Amazon, `"398.99"` on Walmart, `45.95` on eBay |
+| `offers.priceCurrency` | string | `"$"` on Amazon, `"USD"` on Walmart. **Absent on eBay** |
+| `offers.currency` | string | `"USD"` on eBay. A different key for the same thing, so read both |
+| `offers.availability` | string | schema.org URL on eBay, e.g. `https://schema.org/InStock`. Not present on Amazon |
 | `brand` | object | Often only has `slogan`; see below |
 | `rating` | number or null | Unreliable: `null` on a 4.2-star product, `0` on Walmart |
 | `reviewCount` | number | Reliable on Amazon (20,002 observed) |
@@ -71,20 +73,32 @@ these as absent rather than meaningful.
 
 ## Per-retailer differences
 
-| Concern | Amazon | Walmart |
-|---|---|---|
-| Price type | `int` | `str` |
-| Currency form | symbol `"$"` | code `"USD"` |
-| `brand` content | `{"slogan": "Sony"}` | `{"slogan": "Visit the Sony Store"}` |
-| Stock reported | yes, nested | no |
-| Rating source | `additionalProperties.stars` | absent |
-| Images | string lists | list of objects under extras |
-| Identifier | `asin` | `sku` |
-| extras size | 44 keys, about 100 KB | 4 keys |
+Measured on one run per retailer. The point of this table is not the specific counts, it
+is that **coverage is a property of the retailer, not of the tool**, so an agent has to
+handle a retailer that simply says less.
+
+| | Amazon | Walmart | eBay |
+|---|---|---|---|
+| Price key | `offers.price` (number) | `offers.price` (string) | `offers.price` (number) |
+| Currency key | `offers.priceCurrency`, a symbol | `offers.priceCurrency`, an ISO code | **`offers.currency`**, an ISO code |
+| Stock | `additionalProperties.inStock` | not returned | `offers.availability` only |
+| Rating | `additionalProperties.stars` | not returned | not returned |
+| List price | `additionalProperties.listPrice.value` | not returned | not returned |
+| `additionalProperties` keys | 44 | 4 | 4 |
+| `brand` content | `{"slogan": "Sony"}` | `{"slogan": "Visit the Sony Store"}` | `{"slogan": null}` seen |
+| Images | string lists | list of objects under extras | string lists, some 1x1 placeholders |
+| Identifier | `asin` | `sku` | neither, use the item id in the URL |
+| extras size | 44 keys, about 100 KB | 4 keys | 4 keys |
+| Name needs cleaning | no | no | **yes**, link text appended |
+
+On the run behind these numbers, eBay returned stock and rating on **none** of its 161
+records, and Amazon returned both on **all 14** of its. Treat that as the shape of the
+problem rather than as fixed ratios.
 
 ## Reading each field safely
 
-**Name**: `name` or `title`.
+**Name**: `name` or `title`, then strip a trailing `Opens in a new window or tab`. Strip
+it as a suffix only, so a product whose name genuinely contains the phrase survives.
 
 **Price**: read `offers.price`. If it is a string, strip everything except digits and
 dots. Guard against a stray thousands separator leaving two dots. Reject zero and
@@ -117,6 +131,13 @@ or objects with a `url`. Deduplicate and drop anything not starting with `http`.
 Report a percentage only when the current price is genuinely lower.
 
 ### Gotcha
+
+**eBay appends link text to every product name.** Raw, the name reads
+`Saucony Women Cohesion 18Opens in a new window or tab`. That is scraped UI furniture, the
+same class of problem as `brand.slogan` carrying `Visit the Sony Store`, and left in it
+lands in a product card or a cited document as though it were the product's name.
+`read_name()` in `apify_products.py` strips it, and only as a suffix, so a product
+genuinely containing the phrase survives.
 
 An unresolvable URL returns an item with every field empty rather than an error, and
 `brand` may still be present as `{"slogan": null}`. Treat an item with neither a name
