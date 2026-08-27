@@ -1,7 +1,7 @@
 """Run the benchmark arms over the frozen question set and write results.jsonl.
 
     python run.py --arms apify                  # the arm you have keys for
-    python run.py --arms apify,browsing,diy     # all three
+    python run.py --arms apify,openrouter,diy   # the three that need no Anthropic key
     python score.py
 
 Each arm is independent: one arm missing a key or a dependency does not stop the
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from harness import load_questions
 
-ARMS = ("apify", "browsing", "diy")
+ARMS = ("apify", "browsing", "openrouter", "diy")
 
 
 def main() -> None:
@@ -45,6 +45,10 @@ def main() -> None:
         import arm_browsing
         print("running native_browsing ...")
         results += arm_browsing.run_all(questions)
+    if "openrouter" in wanted:
+        import arm_openrouter
+        print("running websearch_openrouter ...")
+        results += arm_openrouter.run_all(questions)
     if "diy" in wanted:
         import arm_playwright
         print("running diy_playwright ...")
