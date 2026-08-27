@@ -1,4 +1,4 @@
-# Results are produced by a run, not checked in. Publish a specific run's file
-# deliberately if you want it in the record, rather than letting it drift in.
-results.jsonl
+# Results ARE checked in: a table nobody can rescore is a table you have to take
+# on trust, so every published number ships with the run that produced it.
+# results-<arm>.jsonl are the per-arm runs, results.jsonl is them concatenated.
 __pycache__/

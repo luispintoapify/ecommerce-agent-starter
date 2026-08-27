@@ -272,9 +272,19 @@ pip install -r benchmark/requirements-bench.txt
 python benchmark/run.py --arms apify,browsing,diy && python benchmark/score.py
 ```
 
-We wrote it and we sell one of the arms, so the credibility rests on three things you can check rather than on our word: the questions were committed **before any arm existed** (check the git history), the scorer only grades objectively true or false properties, and 23 tests pin the scoring rules so they cannot drift toward one arm.
+We wrote it and we sell one of the arms, so the credibility rests on three things you can check rather than on our word: the questions were committed **before any arm existed** (check the git history), the scorer only grades objectively true or false properties, and 29 tests pin the scoring rules so they cannot drift toward one arm.
 
-**There are no results in here yet, because we have not run it.** What this directory holds is the harness, the frozen questions, and the scorer. When we do run it, the numbers will ship with that run's own `results.jsonl` so you can rescore them yourself rather than take a table on trust.
+Run on August 27, 2026, all three arms against the live web in the same window:
+
+| Arm | usable | linked the wrong product | p50 | billed | per usable answer |
+|---|---|---|---|---|---|
+| `apify_mcp` | **18/20** | 0 | 24.1s | $0.2227 | **$0.0124** |
+| `websearch_openrouter` | 9/20 | 7 | 17.7s | $3.5260 | $0.3918 |
+| `diy_playwright` | 0/20 | 0 | 3.0s | $0.0000 | no usable answers |
+
+Read the split before quoting the headline. On the six open-ended questions the first two arms **tie at 6/6**: asked for running shoes under $50, web search does the job fine. The whole gap opens on the fourteen questions that name one specific product, where web search answered about a different shoe seven times. And the two `apify_mcp` misses are products that went out of stock, correctly reported as such rather than guessed.
+
+Two caveats we would rather you heard from us. The thirteen of fourteen pinned products came from an Actor run, so they are items this Actor is known to read, which is selection bias in our favour. And `diy_playwright` was never blocked: it found nine prices and all nine were in Czech koruna, because scraping a US retailer from a European IP returns the localized page. Every run file is committed, so you can rescore all of it with `python score.py --results results.jsonl`.
 
 It scores whether an answer is **actionable and checkable** (a price, a resolvable link to the product actually asked about, a respected budget, honesty about withheld fields) and deliberately does not claim to adjudicate absolute price truth. Where two arms disagree on a price, it flags the case for a human instead of picking a winner. [`benchmark/README.md`](benchmark/README.md) explains what it measures and what it refuses to.
 

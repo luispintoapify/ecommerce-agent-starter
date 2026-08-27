@@ -54,10 +54,16 @@ ARM = "websearch_openrouter"
 #: which is a different question entirely.
 MODEL = "anthropic/claude-opus-5:online"
 
-#: A private Actor on the runner's account that proxies to ``apify/openrouter``.
-#: Passed as an id rather than a handle so a rename does not silently change which
-#: bridge answered.
-BRIDGE_ACTOR = os.environ.get("OPENROUTER_BRIDGE_ACTOR", "tq3dayInULe0wkAJf")
+#: The Actor that proxies to ``apify/openrouter``. There is deliberately no default:
+#: the one used for the published run is private to the account that ran it, so a
+#: hardcoded id would be an Actor no reader can call, and pointing at someone else's
+#: private resource is not a sensible default for a public repo. Set this to your own.
+#:
+#: The bridge is thin. It takes ``messages``, ``system``, ``model`` and ``maxTokens``,
+#: POSTs them to ``https://openrouter.apify.actor/api/v1/chat/completions``, and pushes
+#: one row with ``ok``, ``text``, ``model``, ``seconds`` and OpenRouter's own ``usage``
+#: object. Any Actor with that contract works here.
+BRIDGE_ACTOR = os.environ.get("OPENROUTER_BRIDGE_ACTOR", "")
 RUN_SYNC = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 
 MAX_TOKENS = 800
@@ -83,6 +89,13 @@ def _call(payload: dict[str, Any], token: str) -> dict[str, Any]:
 
 def run_one(q: dict[str, Any]) -> Result:
     r = Result(arm=ARM, qid=q["id"])
+
+    if not BRIDGE_ACTOR:
+        r.error = (
+            "Set OPENROUTER_BRIDGE_ACTOR to an Actor id that proxies to "
+            "apify/openrouter. See the module docstring for the contract."
+        )
+        return r
 
     from apify_products import api_token
 

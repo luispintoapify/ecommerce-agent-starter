@@ -1,5 +1,5 @@
 .env
-*.jsonl
+products.jsonl
 __pycache__/
 *.py[cod]
 .venv/

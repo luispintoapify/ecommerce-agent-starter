@@ -5,27 +5,90 @@ Twenty product questions, three ways of answering them, one scoring script.
 | Arm | What it is | What it needs |
 |---|---|---|
 | `apify_mcp` | An agent calling E-commerce Scraping Tool over the Apify MCP server | `APIFY_TOKEN` |
-| `native_browsing` | The same questions answered by a model with native web search | `ANTHROPIC_API_KEY` |
+| `native_browsing` | The same questions answered by a model with Anthropic's native web search | `ANTHROPIC_API_KEY` |
+| `websearch_openrouter` | The same prompt and model family, but web search via OpenRouter's `:online` plugin, called through an Apify Actor | `APIFY_TOKEN`, `OPENROUTER_BRIDGE_ACTOR` |
 | `diy_playwright` | Write the scraper yourself, no proxies, no anti-bot handling | `pip install playwright` |
+
+`websearch_openrouter` is a **substitute** for `native_browsing`, not a second copy of
+it. The two use the same system prompt, imported from one file so they cannot drift, and
+the same model family, but a different retrieval backend. Two arms that differ in what
+they can find are not one measurement, so they get separate names and separate rows. The
+published run used the substitute, because it needs no Anthropic key.
 
 ```bash
 pip install -r requirements-bench.txt && playwright install chromium
-python run.py --arms apify,browsing,diy
+python run.py --arms apify,openrouter,diy
 python score.py
 ```
 
 Each arm is independent. A missing key or dependency shows up as a row in the table, not a crash.
 
-## No results yet
+## Results, August 27, 2026
 
-We have not run it. This directory is the harness, the twenty frozen questions, and the
-scorer, and that is deliberately all it is: publishing a table before the questions were
-public would defeat the point of freezing them. When a run happens, its `results.jsonl`
-ships alongside the numbers so you can rescore it yourself.
+Every number below came out of `score.py`. The runs that produced them are in this
+directory, so you can rescore them without rerunning anything:
+
+```bash
+python score.py --results results.jsonl
+```
+
+| Arm | usable | gave a price | price not in USD | gave a link | linked the wrong product | p50 | billed |
+|---|---|---|---|---|---|---|---|
+| `apify_mcp` | **18/20** | 18 | 0 | 20 | 0 | 24.1s | $0.2227 |
+| `websearch_openrouter` | 9/20 | 15 | 0 | 20 | **7** | 17.7s | $3.5260 |
+| `diy_playwright` | 0/20 | 9 | **9** | 9 | 0 | 3.0s | $0.0000 |
+
+Cost per usable answer: **$0.0124**, $0.3918, and no usable answers.
+
+### The headline hides where the difference actually is
+
+Fourteen questions name a specific product by URL, so "did you answer about the thing I
+asked about" is checkable. Six are keyword questions with no such anchor. Split that way:
+
+| Arm | 14 URL-anchored | right product | wrong product | 6 keyword |
+|---|---|---|---|---|
+| `apify_mcp` | 12/14 | 14 | 0 | 6/6 |
+| `websearch_openrouter` | 3/14 | 7 | 7 | 6/6 |
+| `diy_playwright` | 0/14 | 9 | 0 | 0/6 |
+
+**On the open questions the first two arms tie.** Asked for running shoes under $50, web
+search does the job. The entire gap opens on questions that pin one item, where web
+search answered about a different shoe seven times out of fourteen.
+
+### Three things the table does not say
+
+**The two `apify_mcp` misses are out-of-stock products, not wrong answers.** Both are the
+ASICS Gel-Cumulus 27. The Actor returned `offers.price: null` with
+`additionalProperties.inStock: false`, and the arm reported that instead of guessing a
+number. Both had prices nine days earlier. "Usable" requires a price you can act on, so
+they score as misses, which is the right call for the question and the wrong word for
+what happened.
+
+**Nobody here is shown to have the correct price.** `score.py` prints twelve price
+disagreements between the first two arms and refuses to adjudicate them, because absolute
+price truth needs a human on the page at the same moment. What can be said mechanically
+is that an arm which linked a different product will report a different price, and one
+arm did that seven times.
+
+**`diy_playwright` was not blocked.** It loaded fourteen pages and found nine prices, and
+all nine came back in Czech koruna, because scraping a US retailer from a European IP
+returns the localized page. Its failure is locale, not anti-bot. An early probe of the
+web-search arm hit the same wall from a different direction, answering with a Canadian
+dollar price from `amazon.ca`. Note also that `diy_playwright` is the fastest arm by a
+factor of eight and costs nothing; the trade-off is real, it just does not answer the
+question that was asked.
 
 ## We built this and we sell one of the arms
 
 So the credibility has to come from somewhere other than our word. Three things carry it:
+
+**The products came from an Actor run, and that favours one arm.** Thirteen of the
+fourteen pinned products are the Amazon subset of a single E-commerce Scraping Tool run
+from August 18, 2026, so they are products that Actor is known to read. The scorer never
+compares against a stored price, and `expect_id` only checks that an arm answered about
+the product asked about, so this is not circular. It is still selection bias, and it runs
+in our favour: the questions are real and were frozen before any arm ran, but they were
+not sampled blind from the web. Weigh the result accordingly.
 
 **The questions were frozen before any arm ran.** `questions.json` was committed on August 18, 2026, in its own commit, before a single result existed. Check the git history: if the questions had been chosen to flatter one arm, the commit order would show it. Do not edit that file to fit a result. Add a `questions-v1.1.json` and say what changed and why.
 
