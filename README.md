@@ -107,7 +107,7 @@ Refresh a catalog into documents ready for embedding:
 python rag_refresh.py --catalog catalog.example.json --sink jsonl
 ```
 
-The `jsonl` sink needs no vector store and no extra dependencies. Look at `products.jsonl` before wiring anything: it holds the exact documents and metadata that would be upserted.
+The `jsonl` sink needs no vector store and no extra dependencies. That command writes `products.jsonl`. Read it before wiring anything: it holds the exact documents and metadata that would be upserted.
 
 Into Pinecone:
 
@@ -274,17 +274,13 @@ python benchmark/run.py --arms apify,browsing,diy && python benchmark/score.py
 
 We wrote it and we sell one of the arms, so the credibility rests on three things you can check rather than on our word: the questions were committed **before any arm existed** (check the git history), the scorer only grades objectively true or false properties, and 23 tests pin the scoring rules so they cannot drift toward one arm.
 
+**There are no results in here yet, because we have not run it.** What this directory holds is the harness, the frozen questions, and the scorer. When we do run it, the numbers will ship with that run's own `results.jsonl` so you can rescore them yourself rather than take a table on trust.
+
 It scores whether an answer is **actionable and checkable** (a price, a resolvable link to the product actually asked about, a respected budget, honesty about withheld fields) and deliberately does not claim to adjudicate absolute price truth. Where two arms disagree on a price, it flags the case for a human instead of picking a winner. [`benchmark/README.md`](benchmark/README.md) explains what it measures and what it refuses to.
 
 ## Scheduling
 
 [`.github/workflows/refresh.yml`](.github/workflows/refresh.yml) is a working example of the scheduled path. Fork it, add an `APIFY_TOKEN` secret, point `--catalog` at your own URLs, and swap the artifact upload for `--sink pinecone`. The `schedule` trigger ships commented out so a fork does not start spending credits on a cron nobody asked for.
-
-## Demo
-
-A recorded run, replayed: [Running Shoes in 29.6s](https://claude.ai/code/artifact/a9fb57d3-8ea7-40c7-8383-ae618f511509). One keyword, two retailers, 175 typed records, and a panel showing which fields each retailer actually returned. Every value is verbatim from run `5MktQElgZgf9cIina`.
-
-<!-- TODO: embed the 60 to 90 second demo clip once it is recorded. -->
 
 ## Contributing
 

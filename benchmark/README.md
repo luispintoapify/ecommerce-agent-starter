@@ -16,6 +16,13 @@ python score.py
 
 Each arm is independent. A missing key or dependency shows up as a row in the table, not a crash.
 
+## No results yet
+
+We have not run it. This directory is the harness, the twenty frozen questions, and the
+scorer, and that is deliberately all it is: publishing a table before the questions were
+public would defeat the point of freezing them. When a run happens, its `results.jsonl`
+ships alongside the numbers so you can rescore it yourself.
+
 ## We built this and we sell one of the arms
 
 So the credibility has to come from somewhere other than our word. Three things carry it:
