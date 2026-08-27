@@ -1,6 +1,6 @@
 # ecommerce-agent-starter
 
-Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp): current price, stock, brand, rating, and image URLs from Amazon, Walmart, Target, eBay, and many more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
+Give any AI agent live product data through the [Apify MCP server](https://docs.apify.com/integrations/mcp?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120): current price, stock, brand, rating, and image URLs from Amazon, Walmart, Target, eBay, and many more retailers. Runtime tool calls plus a scheduled RAG refresh, in Python, MIT licensed.
 
 A language model answers product questions from training data that was fixed months ago, or from browsing that reads a page as prose with no product fields. Neither gives you a price you can rely on today. This starter wires an agent to the real thing, as structured fields it can compare, filter, and act on.
 
@@ -11,7 +11,7 @@ Two paths, because they solve different problems:
 | **`runtime_call.py`** | Apify MCP server | The answer has to be true right now, for a handful of products |
 | **`rag_refresh.py`** | Apify REST API | A catalog an agent answers from repeatedly |
 
-Both run [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool), an Apify Actor that handles anti-bot, proxies, and per-retailer extraction, so there is no scraper in this repo to maintain.
+Both run [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120), an Apify Actor that handles anti-bot, proxies, and per-retailer extraction, so there is no scraper in this repo to maintain.
 
 **Why two transports.** The runtime path goes through MCP because that is what an agent does, so the code shows you what your agent is doing. The batch job does not: a cron with no agent in it gains nothing from the protocol, and it needs the full dataset rather than a tool result. `apify_products.py` normalizes both into the same shape, and a test asserts the two agree.
 
@@ -37,7 +37,7 @@ Copy [`mcp_config.json`](mcp_config.json) into your Claude config, or paste this
 
 Claude Desktop reads `claude_desktop_config.json`. On macOS that is `~/Library/Application Support/Claude/`, on Windows `%APPDATA%\Claude\`. Restart Claude and the tool appears. You authenticate with OAuth on first use, so no token goes in the file.
 
-Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store) at runtime rather than only this one Actor. Keeping it narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
+Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120) at runtime rather than only this one Actor. Keeping it narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
 
 ### Cursor
 
@@ -51,11 +51,11 @@ n8n has no JSON config to copy, because MCP is a node. Add an **AI Agent** node,
 https://mcp.apify.com?tools=apify/e-commerce-scraping-tool
 ```
 
-Authenticate with a bearer token from [Apify Console](https://console.apify.com/settings/integrations) rather than OAuth, since the node runs unattended.
+Authenticate with a bearer token from [Apify Console](https://console.apify.com/settings/integrations?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120) rather than OAuth, since the node runs unattended.
 
 ### Anything else
 
-Any MCP client that speaks Streamable HTTP works against the same URL. SSE was removed on April 1, 2026. The [Apify MCP documentation](https://docs.apify.com/integrations/mcp) covers transports, authentication, and Actor discovery in full.
+Any MCP client that speaks Streamable HTTP works against the same URL. SSE was removed on April 1, 2026. The [Apify MCP documentation](https://docs.apify.com/integrations/mcp?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120) covers transports, authentication, and Actor discovery in full.
 
 ## What the MCP flow actually looks like
 
@@ -86,7 +86,7 @@ pip install -r requirements.txt
 cp .env.example .env      # add your APIFY_TOKEN
 ```
 
-Your token comes from [Apify Console](https://console.apify.com/settings/integrations). The free tier is enough to try everything here.
+Your token comes from [Apify Console](https://console.apify.com/settings/integrations?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120). The free tier is enough to try everything here.
 
 One product, live, over MCP:
 
@@ -189,7 +189,7 @@ Without that, an agent will quote an indexed price as though it were live, which
 
 ## Cost and speed
 
-E-commerce Scraping Tool bills per event: a start event per call, plus per product pushed, plus residential proxy and browser rendering where a retailer needs them. Current rates are on the [Actor's pricing tab](https://apify.com/apify/e-commerce-scraping-tool/pricing). Two consequences for how you call it:
+E-commerce Scraping Tool bills per event: a start event per call, plus per product pushed, plus residential proxy and browser rendering where a retailer needs them. Current rates are on the [Actor's pricing tab](https://apify.com/apify/e-commerce-scraping-tool/pricing?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120). Two consequences for how you call it:
 
 - **Batch.** One call for 200 products costs far less than 200 calls for one. `rag_refresh.py` batches by default.
 - **Cap.** `--limit` is a hard cap the platform enforces, not a suggestion. Leave it set.
@@ -202,11 +202,11 @@ On one recorded run, 175 products across Amazon and eBay came back in 30 seconds
 
 The Actor's `marketplaces` input lists storefronts with dedicated extractors, including Amazon, Walmart, Target, eBay, Best Buy, Home Depot, Lowe's, IKEA, Tesco, Mercado Libre, Idealo, and Kaufland.
 
-**Over MCP that list arrives truncated.** The server caps how many characters of a long enum it passes through, so some supported retailers are missing from what an agent can select, and passing one anyway is a validation error before the run starts. It does not mean the retailer is unsupported: `detailsUrls` takes arbitrary URLs and is unaffected. Use it when the marketplace you want is not selectable.
+**Over MCP that list arrives truncated.** The server caps how many characters of a long enum it passes through, so some supported retailers are missing from what an agent can select, and passing one anyway is a validation error before the run starts. Measured on 2026-08-27: of 249 values, the first 122 fit in the cap and **127 are dropped**. Amazon and eBay survive; **Walmart and Target do not**, so neither can be named in a keyword search on such a connection. It does not mean the retailer is unsupported: `detailsUrls` takes arbitrary URLs and is unaffected. Use it when the marketplace you want is not selectable.
 
 **That list is not the boundary of what works.** It names the retailers with dedicated extractors. Sites outside it fall back to generic extraction, which is enabled by default, so a URL from an unlisted shop is worth trying. What the list buys you is depth: field coverage is best on the major retailers, so check the fields you depend on before building on a smaller store.
 
-The current list is in the [Actor's input schema](https://apify.com/apify/e-commerce-scraping-tool/input-schema). For marketplaces outside this Actor's scope, [Apify Store](https://apify.com/store) has retailer-specific Actors that reach the same MCP server.
+The current list is in the [Actor's input schema](https://apify.com/apify/e-commerce-scraping-tool/input-schema?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120). For marketplaces outside this Actor's scope, [Apify Store](https://apify.com/store?utm_source=github&utm_medium=readme&utm_campaign=gtm-cam-120) has retailer-specific Actors that reach the same MCP server.
 
 ### When a URL comes back empty
 
