@@ -7,10 +7,13 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import Result, score_one, prices_in, urls_in, mentions_absent, asserts_out_of_stock
+from harness import (Result, score_one, prices_in, money_in, urls_in, mentions_absent,
+                     asserts_out_of_stock)
 
 Q_PRICE = {"id": "q01", "type": "price", "expect_id": "B0F643TQ4W",
            "url": "https://www.amazon.com/dp/B0F643TQ4W"}
+Q_PRICE_CZK = {"id": "q02", "type": "price", "expect_id": "B0DM3448NM",
+               "url": "https://www.amazon.com/dp/B0DM3448NM"}
 Q_STOCK = {"id": "q05", "type": "stock", "expect_id": "B09XS7JWHH",
            "url": "https://www.amazon.com/dp/B09XS7JWHH"}
 Q_BUDGET = {"id": "q17", "type": "constraint", "keyword": "running shoes", "max_price": 50}
@@ -123,3 +126,47 @@ def test_no_url_is_not_a_wrong_product():
 def test_no_url_with_a_price_is_still_not_wrong_product():
     s = score_one(Q_PRICE, r("About $89.95."))
     assert s["right_product"] is None and not s["usable"]
+
+
+# --- currency, added after the DIY arm returned CZK prices from a European IP ---
+
+def test_reads_a_currency_code_before_the_amount():
+    # The original regex only took a leading "$" or a trailing code, so a real
+    # answer phrased "USD 89.95" scored as giving no price at all.
+    assert money_in("USD 89.95") == [("USD", 89.95)]
+    assert prices_in("USD 89.95") == [89.95]
+
+
+def test_foreign_currency_is_a_figure_but_not_a_usd_price():
+    assert money_in("CZK2,271.35") == [("CZK", 2271.35)]
+    assert prices_in("CZK2,271.35") == []
+
+
+def test_symbols_normalize_to_iso_codes():
+    assert money_in("US$45") == [("USD", 45.0)]
+    assert money_in("€80.00") == [("EUR", 80.0)]
+    assert money_in("£72") == [("GBP", 72.0)]
+
+
+def test_wrong_currency_is_not_usable_but_does_count_as_a_price():
+    # Scraping amazon.com from a European IP returns a localized page. Reporting
+    # that as "no price" hides the actual failure, which is the locale.
+    r = Result(arm="a", qid="q02",
+               answer="Brooks Ghost Max 3 | CZK2,271.35 https://www.amazon.com/dp/B0DM3448NM")
+    s = score_one(Q_PRICE_CZK, r)
+    assert s["gave_price"] is True
+    assert s["right_currency"] is False
+    assert not s["usable"]
+
+
+def test_usd_answer_has_right_currency_true():
+    r = Result(arm="a", qid="q01",
+               answer="$89.95 https://www.amazon.com/dp/B0F643TQ4W")
+    s = score_one(Q_PRICE, r)
+    assert s["right_currency"] is True and s["usable"]
+
+
+def test_no_figure_leaves_currency_unjudged():
+    r = Result(arm="a", qid="q01", answer="Sold on Amazon https://www.amazon.com/dp/B0F643TQ4W")
+    s = score_one(Q_PRICE, r)
+    assert s["gave_price"] is False and s["right_currency"] is None

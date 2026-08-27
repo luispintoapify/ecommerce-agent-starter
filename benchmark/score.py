@@ -46,6 +46,7 @@ def main() -> None:
             "usable": sum(1 for r in rs if r["usable"]),
             "usable_pct": round(100 * sum(1 for r in rs if r["usable"]) / n, 1) if n else 0,
             "gave_price": sum(1 for r in rs if r["gave_price"]),
+            "wrong_cur": sum(1 for r in rs if r.get("right_currency") is False),
             "gave_url": sum(1 for r in rs if r["gave_url"]),
             "wrong_product": sum(1 for r in rs if r["right_product"] is False),
             "over_budget": sum(1 for r in rs if r["in_budget"] is False),
@@ -63,7 +64,7 @@ def main() -> None:
         return
 
     cols = [
-        ("arm", 16), ("usable", 8), ("price", 6), ("url", 5), ("wrong", 6),
+        ("arm", 16), ("usable", 8), ("price", 6), ("cur!=USD", 9), ("url", 5), ("wrong", 6),
         ("budget", 7), ("stock", 6), ("block", 6), ("err", 4),
         ("p50 ms", 8), ("max ms", 8), ("$ total", 9),
     ]
@@ -71,7 +72,7 @@ def main() -> None:
     print("  ".join("-" * w for _, w in cols))
     for arm, s in sorted(summary.items(), key=lambda kv: -kv[1]["usable_pct"]):
         vals = [
-            arm, f"{s['usable']}/{s['questions']}", str(s["gave_price"]), str(s["gave_url"]),
+            arm, f"{s['usable']}/{s['questions']}", str(s["gave_price"]), str(s["wrong_cur"]), str(s["gave_url"]),
             str(s["wrong_product"]), str(s["over_budget"]), str(s["stock_dishonest"]),
             str(s["blocked"]), str(s["errored"]),
             str(s["latency_p50_ms"] or "-"), str(s["latency_max_ms"] or "-"),
@@ -79,8 +80,10 @@ def main() -> None:
         ]
         print("  ".join(v.ljust(w) for v, (_, w) in zip(vals, cols)))
 
-    print("\nColumns: usable = gave a price, a resolvable link to the product asked about,")
-    print("and stayed inside any stated budget. wrong = linked a different product.")
+    print("\nColumns: usable = gave a USD price, a resolvable link to the product asked")
+    print("about, and stayed inside any stated budget. wrong = linked a different product.")
+    print("cur!=USD = gave a figure in another currency, which is what a localized page")
+    print("returns when you scrape a US retailer from a European IP.")
     print("stock = asserted out of stock on a question where absence was the honest answer.")
 
     # Cross-arm disagreement: the same question priced differently by two arms is

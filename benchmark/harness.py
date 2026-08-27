@@ -37,7 +37,22 @@ ABSENT_PHRASES = (
 #: report stock is the single most damaging error an arm can make, so it is scored.
 OUT_OF_STOCK_PHRASES = ("out of stock", "sold out", "unavailable", "no longer available")
 
-PRICE_RE = re.compile(r"(?<![\d.])(?:US)?\$\s?([\d,]+\.?\d{0,2})|([\d,]+\.\d{2})\s?(?:USD|EUR|GBP)")
+#: Money in either order: a symbol or an ISO code before the amount, or after it.
+#: The questions all ask about US retailers, so a figure in another currency is a
+#: *different* failure from no figure at all: scraping amazon.com from a European IP
+#: returns a localized page, and reporting "no price" for a CZK price hides that.
+_CUR_CODE = "USD|EUR|GBP|CZK|CAD|AUD|CHF|PLN|SEK|DKK|NOK|JPY"
+_SYMBOL = r"US\$|\$|\u20ac|\u00a3|K\u010d"
+_AMT = r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?"
+MONEY_RE = re.compile(
+    rf"(?<![\w.])(?:(?P<pre>{_SYMBOL}|{_CUR_CODE})\s?(?P<amt1>{_AMT})"
+    rf"|(?P<amt2>{_AMT})\s?(?P<post>{_SYMBOL}|{_CUR_CODE}))(?!\d)",
+    re.IGNORECASE,
+)
+
+#: Symbol to ISO code. "$" is treated as USD because every question names a US
+#: retailer; an arm that means CAD has to say so.
+_SYMBOL_CODE = {"$": "USD", "US$": "USD", "\u20ac": "EUR", "\u00a3": "GBP", "K\u010d": "CZK"}
 URL_RE = re.compile(r"https?://[^\s\)\]\>\"']+")
 
 
@@ -64,16 +79,28 @@ def load_questions() -> list[dict[str, Any]]:
     return json.loads(QUESTIONS.read_text())["questions"]
 
 
-def prices_in(text: str) -> list[float]:
-    """Every money-shaped number in the answer, in order."""
-    out = []
-    for m in PRICE_RE.finditer(text or ""):
-        raw = m.group(1) or m.group(2)
+def money_in(text: str) -> list[tuple[str, float]]:
+    """Every money-shaped figure in the answer as (ISO currency, amount), in order."""
+    out: list[tuple[str, float]] = []
+    for m in MONEY_RE.finditer(text or ""):
+        raw = m.group("amt1") or m.group("amt2")
+        token = (m.group("pre") or m.group("post") or "").strip()
+        code = _SYMBOL_CODE.get(token, _SYMBOL_CODE.get(token.upper(), token.upper()))
         try:
-            out.append(float(raw.replace(",", "")))
+            out.append((code, float(raw.replace(",", ""))))
         except ValueError:
             continue
     return out
+
+
+def prices_in(text: str) -> list[float]:
+    """The USD amounts in the answer, in order.
+
+    Budgets and cross-arm comparison are both in USD, so a foreign figure is
+    deliberately excluded here rather than silently compared against a dollar
+    threshold. Use ``money_in`` when you need to know a figure was given at all.
+    """
+    return [amt for code, amt in money_in(text) if code == "USD"]
 
 
 def urls_in(text: str) -> list[str]:
@@ -94,10 +121,18 @@ def score_one(q: dict[str, Any], r: Result) -> dict[str, Any]:
     """Score one result against one question. Every check here is objective."""
     text = r.answer or ""
     prices = prices_in(text)
+    money = money_in(text)
     urls = urls_in(text)
 
-    gave_price = bool(prices)
+    # A figure was given, in whatever currency. The currency is judged separately.
+    gave_price = bool(money)
     gave_url = bool(urls)
+
+    # Every question names a US retailer, so a non-USD figure is not an answer to
+    # the question that was asked. None when no figure was given at all.
+    right_currency = None
+    if money:
+        right_currency = all(code == "USD" for code, _ in money)
 
     # Did it link the product that was actually asked about? For URL-anchored
     # questions the identifier is in the path, so this is exact rather than fuzzy.
@@ -125,6 +160,7 @@ def score_one(q: dict[str, Any], r: Result) -> dict[str, Any]:
 
     checks = {
         "gave_price": gave_price,
+        "right_currency": right_currency,
         "gave_url": gave_url,
         "right_product": right_product,
         "in_budget": in_budget,
@@ -132,6 +168,8 @@ def score_one(q: dict[str, Any], r: Result) -> dict[str, Any]:
     }
     # A question is "usable" when you could act on the answer without re-researching.
     core = [gave_price, gave_url]
+    if right_currency is not None:
+        core.append(right_currency)
     if right_product is not None:
         core.append(right_product)
     if in_budget is not None:
@@ -144,6 +182,7 @@ def score_one(q: dict[str, Any], r: Result) -> dict[str, Any]:
         "latency_ms": r.latency_ms, "cost_usd": r.cost_usd,
         "tokens_in": r.tokens_in, "tokens_out": r.tokens_out, "tool_calls": r.tool_calls,
         "prices_seen": prices[:5],
+        "currencies_seen": sorted({code for code, _ in money}),
         **checks,
     }
 
