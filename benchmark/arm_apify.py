@@ -17,11 +17,40 @@ from harness import Result, Timer  # noqa: E402
 
 ARM = "apify_mcp"
 
-#: Measured from two single-product runs and one 175-product run. Used to report a
-#: cost per question rather than leaving the column empty. Replace with the figure
-#: from your own Apify Console billing if you need precision.
+#: Fallback only. The billed amount is read from the run itself (see ``billed_usd``);
+#: these are used when that read fails, and they are known to be rough in both
+#: directions. Measured against 20 real runs on 2026-08-27, this arithmetic
+#: overshot single-product runs by 1.7x and undershot 20-product keyword runs by up
+#: to 3.3x, because it accounts for neither residential proxy nor browser rendering.
+#: Never publish a cost from these without saying it is an estimate.
 USD_PER_START = 0.0026
 USD_PER_PRODUCT = 0.0017
+
+#: The run record carries ``usageTotalUsd``, which is what the platform actually
+#: charged. It is not exposed over MCP, so it is read over REST after the run.
+RUN_API = "https://api.apify.com/v2/actor-runs/{run_id}"
+
+
+def billed_usd(run_id: str | None) -> float | None:
+    """What the platform actually charged for this run, or None if unreadable.
+
+    A cost column that is arithmetic over list rates invites exactly the error it
+    made here, so the number reported is the invoice and the estimate is the
+    fallback.
+    """
+    if not run_id:
+        return None
+    try:
+        import json as _json
+        import urllib.request
+
+        from apify_products import api_token
+
+        url = RUN_API.format(run_id=run_id) + f"?token={api_token()}"
+        with urllib.request.urlopen(url, timeout=20) as resp:  # noqa: S310 - fixed host
+            return float(_json.load(resp)["data"].get("usageTotalUsd") or 0.0)
+    except Exception:  # noqa: BLE001 - a missing cost must not fail the question
+        return None
 
 
 def build_input(q: dict[str, Any]) -> dict[str, Any]:
@@ -75,8 +104,19 @@ async def run_one(q: dict[str, Any]) -> Result:
         r.latency_ms = t.ms
         r.answer = answer_from(products, q)
         r.tool_calls = 3  # call, poll, fetch
-        r.cost_usd = round(USD_PER_START + USD_PER_PRODUCT * len(products), 5)
-        r.raw = {"runId": meta.get("runId"), "status": meta.get("status"), "n": len(products)}
+        run_id = meta.get("runId")
+        actual = billed_usd(run_id)
+        r.cost_usd = (
+            round(actual, 5)
+            if actual is not None
+            else round(USD_PER_START + USD_PER_PRODUCT * len(products), 5)
+        )
+        r.raw = {
+            "runId": run_id,
+            "status": meta.get("status"),
+            "n": len(products),
+            "cost_source": "billed" if actual is not None else "estimated",
+        }
     except Exception as exc:  # noqa: BLE001 - every arm records its own failure
         r.error = f"{type(exc).__name__}: {exc}"[:300]
     return r
