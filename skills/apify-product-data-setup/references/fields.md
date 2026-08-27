@@ -136,8 +136,8 @@ Report a percentage only when the current price is genuinely lower.
 `Saucony Women Cohesion 18Opens in a new window or tab`. That is scraped UI furniture, the
 same class of problem as `brand.slogan` carrying `Visit the Sony Store`, and left in it
 lands in a product card or a cited document as though it were the product's name.
-`read_name()` in `apify_products.py` strips it, and only as a suffix, so a product
-genuinely containing the phrase survives.
+[`read_name()`](https://github.com/luispintoapify/ecommerce-agent-starter/blob/main/apify_products.py) strips it, and only as a
+suffix, so a product whose name genuinely contains the phrase survives.
 
 An unresolvable URL returns an item with every field empty rather than an error, and
 `brand` may still be present as `{"slogan": null}`. Treat an item with neither a name

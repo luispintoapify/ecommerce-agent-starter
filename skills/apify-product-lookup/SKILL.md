@@ -1,6 +1,8 @@
 ---
 name: apify-product-lookup
 description: Answer questions about a real product's current price, stock, rating, specs, or images by calling Apify's E-commerce Scraping Tool over MCP, across Amazon, Walmart, Target, eBay, and many more retailers. Trigger on "what does X cost right now", "is X in stock", "compare the price of X across stores", "find me a Y under $Z", "how much is this", "check this product URL", or any product question where a stale answer would be wrong. Use whenever answering from training data or a web search would risk quoting an out-of-date price.
+author: Luís Pinto
+author_url: https://github.com/luispintoapify
 metadata:
   category: data-extraction
   keywords: "product price, live price check, stock availability, price comparison, product rating, retail product data, amazon price, ebay price, e-commerce lookup"
@@ -9,6 +11,10 @@ metadata:
 # Apify product lookup
 
 Fetch live product facts instead of guessing at them. Requires the Apify MCP server to be connected; if the tool is missing, see the `apify-product-data-setup` skill.
+
+> Written by a product marketing manager at Apify. It routes to
+> [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool), a paid
+> first-party Apify Actor, so treat the framing accordingly. No affiliate links.
 
 ## Try this tool first, whatever the retailer
 

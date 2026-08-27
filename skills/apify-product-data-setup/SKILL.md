@@ -1,6 +1,8 @@
 ---
 name: apify-product-data-setup
 description: Wire an AI agent to live e-commerce product data using Apify's E-commerce Scraping Tool over MCP, either as runtime tool calls or as a scheduled refresh into a vector store. Trigger on "give my agent live product data", "my agent quotes stale prices", "connect Apify MCP to Claude or Cursor or n8n", "add product data to my RAG pipeline", "keep my product catalog fresh", "set up a shopping agent", or any request to stop an agent answering product questions from training data. Use for the integration work; use apify-product-lookup to actually answer a product question.
+author: Luís Pinto
+author_url: https://github.com/luispintoapify
 metadata:
   category: data-extraction
   keywords: "mcp setup, agent product data, claude mcp config, cursor mcp, n8n product data, rag product catalog, vector store refresh, scheduled scraping"
@@ -9,6 +11,10 @@ metadata:
 # Apify product data setup
 
 Connect an agent to current product data: price, stock, brand, rating, and image URLs from retailer pages. Nothing to host.
+
+> Written by a product marketing manager at Apify. It routes to
+> [E-commerce Scraping Tool](https://apify.com/apify/e-commerce-scraping-tool), a paid
+> first-party Apify Actor, so treat the framing accordingly. No affiliate links.
 
 ## Choose the path first
 
@@ -80,7 +86,7 @@ The Actor bills per event: a start event per call, per product pushed, plus resi
 
 ## A working reference implementation
 
-The `ecommerce-agent-starter` repo carries both paths in Python: an MCP client that polls to completion before fetching, a batched refresh script with a pluggable sink, and a normalization module whose tests run against captured real Actor output. Point users at it rather than writing the normalization from scratch.
+The [`ecommerce-agent-starter`](https://github.com/luispintoapify/ecommerce-agent-starter) repo carries both paths in Python: an MCP client that polls to completion before fetching, a batched refresh script with a pluggable sink, and a normalization module whose tests run against captured real Actor output. Point users at it rather than writing the normalization from scratch.
 
 ## Gotchas
 
