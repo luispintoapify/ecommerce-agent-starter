@@ -37,7 +37,7 @@ Copy [`mcp_config.json`](mcp_config.json) into your Claude config, or paste this
 
 Claude Desktop reads `claude_desktop_config.json`. On macOS that is `~/Library/Application Support/Claude/`, on Windows `%APPDATA%\Claude\`. Restart Claude and the tool appears. You authenticate with OAuth on first use, so no token goes in the file.
 
-Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store) at runtime instead of just this one Actor. Keeping it narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
+Drop the `?tools=` parameter and the agent can search all of [Apify Store](https://apify.com/store) at runtime rather than only this one Actor. Keeping it narrows what the model has to choose from, which makes tool selection more reliable when product data is the only job.
 
 ### Cursor
 
@@ -185,7 +185,7 @@ true this second, call E-commerce Scraping Tool instead of answering from the
 catalog.
 ```
 
-Without that, an agent will quote an indexed price as though it were live, which is the same failure as answering from training data, just with fresher wrong numbers.
+Without that, an agent will quote an indexed price as though it were live, which is the same failure as answering from training data, only with fresher wrong numbers.
 
 ## Cost and speed
 

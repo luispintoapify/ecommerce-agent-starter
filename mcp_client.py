@@ -124,7 +124,7 @@ async def fetch_products(
 
                 # The Actor tool returns when its wait window elapses, not when the
                 # run ends, so poll before fetching. Skipping this returns an empty
-                # list from a dataset that simply has not been written yet.
+                # list from a dataset that has not been written yet.
                 polls = 0
                 while str(meta.get("status", "")).upper() not in TERMINAL:
                     if polls >= MAX_POLLS:

@@ -75,7 +75,7 @@ these as absent rather than meaningful.
 
 Measured on one run per retailer. The point of this table is not the specific counts, it
 is that **coverage is a property of the retailer, not of the tool**, so an agent has to
-handle a retailer that simply says less.
+handle a retailer that says less.
 
 | | Amazon | Walmart | eBay |
 |---|---|---|---|

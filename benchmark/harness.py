@@ -33,7 +33,7 @@ ABSENT_PHRASES = (
     "could not determine", "unable to determine", "not disclosed",
 )
 
-#: Phrases that assert absence of stock. Saying this when the retailer simply did not
+#: Phrases that assert absence of stock. Saying this when the retailer did not
 #: report stock is the single most damaging error an arm can make, so it is scored.
 OUT_OF_STOCK_PHRASES = ("out of stock", "sold out", "unavailable", "no longer available")
 
