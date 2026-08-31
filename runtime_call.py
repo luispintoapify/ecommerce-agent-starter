@@ -25,7 +25,7 @@ import sys
 import time
 from typing import Any
 
-from apify_products import Product
+from apify_products import Product, positive_int
 
 
 def build_input(args: argparse.Namespace) -> dict[str, Any]:
@@ -144,7 +144,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_int,
         default=5,
         help="Hard cap on products collected. This is the cost control: the Actor "
         "bills per product pushed.",

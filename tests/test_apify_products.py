@@ -8,6 +8,7 @@ shape, recapture the fixture rather than loosening the assertion.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from apify_products import (
     normalize,
     normalize_all,
     parse_price,
+    positive_int,
     read_brand,
     read_images,
     read_in_stock,
@@ -323,3 +325,24 @@ def test_a_name_that_merely_contains_the_phrase_is_untouched():
     one where it appears mid-string, must survive."""
     p = normalize({"name": "Opens in a new window or tab sticker pack"}, FETCHED)
     assert p.name == "Opens in a new window or tab sticker pack"
+
+
+# --- positive_int, added after --batch 0 reached range(0, n, 0) and --limit 0
+#     reached the Actor, which bills a start event before rejecting the input ---
+
+
+def test_positive_int_accepts_counts():
+    assert positive_int("1") == 1
+    assert positive_int("8") == 8
+
+
+def test_positive_int_rejects_zero_and_negatives():
+    for bad in ("0", "-1", "-100"):
+        with pytest.raises(argparse.ArgumentTypeError, match="1 or more"):
+            positive_int(bad)
+
+
+def test_positive_int_rejects_non_numbers():
+    for bad in ("abc", "", "1.5", " "):
+        with pytest.raises(argparse.ArgumentTypeError, match="whole number"):
+            positive_int(bad)

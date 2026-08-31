@@ -29,7 +29,7 @@ from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from apify_products import Product, normalize_all, run_actor_sync
+from apify_products import Product, normalize_all, positive_int, run_actor_sync
 
 BATCH_SIZE = 50
 
@@ -168,7 +168,7 @@ def main() -> int:
 
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_int,
         default=100,
         help="Hard cap on products collected per run. This is the cost control.",
     )
@@ -184,7 +184,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--batch",
-        type=int,
+        type=positive_int,
         default=8,
         help="URLs per Actor call. Kept low because the whole call shares one "
         "300s timeout: a slow retailer can take over 100s for a single product, "

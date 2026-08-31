@@ -452,6 +452,24 @@ def normalize_all(
 # --- Apify REST ---------------------------------------------------------------
 
 
+def positive_int(value: str) -> int:
+    """An argparse ``type`` for counts that must be at least 1.
+
+    Both CLIs pass these to the Actor, which rejects zero with a 400 *after* the
+    start event has been billed, so the user pays to learn what argparse can say for
+    free. ``--batch 0`` is worse: it reaches ``range(0, n, 0)`` and raises ValueError.
+    """
+    import argparse
+
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a whole number, got {value!r}") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {number}")
+    return number
+
+
 def api_token() -> str:
     token = os.environ.get("APIFY_TOKEN") or os.environ.get("APIFY_API_KEY")
     if not token:
