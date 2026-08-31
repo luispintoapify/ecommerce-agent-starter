@@ -120,6 +120,8 @@ python rag_refresh.py --catalog catalog.example.json --sink pinecone
 
 `apify_products.py` normalizes the Actor's output into one stable shape. That module is the part worth reading, because field names, types, and nesting vary by retailer, and reading them naively works on Amazon and then breaks on the next store.
 
+If you want it in your own project rather than this one, `pip install -e .` makes the four modules importable, so `from apify_products import normalize` works from anywhere. The scripts do not need that install; `requirements.txt` is enough to run everything here.
+
 Measured against live runs, not guessed:
 
 | Field | Amazon returned | Walmart returned |
