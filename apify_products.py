@@ -480,13 +480,22 @@ def run_actor_sync(
     if max_items is not None:
         params["maxItems"] = str(max_items)
 
-    with httpx.Client(timeout=timeout_secs + 30) as client:
-        response = client.post(
-            f"{APIFY_BASE}/acts/{ACTOR_ID}/run-sync-get-dataset-items",
-            params=params,
-            headers={"Authorization": f"Bearer {api_token()}"},
-            json=payload,
-        )
+    try:
+        with httpx.Client(timeout=timeout_secs + 30) as client:
+            response = client.post(
+                f"{APIFY_BASE}/acts/{ACTOR_ID}/run-sync-get-dataset-items",
+                params=params,
+                headers={"Authorization": f"Bearer {api_token()}"},
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        # Transport failures (DNS, refused, read timeout) are raised as the same
+        # RuntimeError the API-error branch below uses, because callers already
+        # handle that and a scheduled job should print a line, not a stack trace.
+        host = APIFY_BASE.split("/")[2] if "//" in APIFY_BASE else APIFY_BASE
+        raise RuntimeError(
+            f"Could not reach {host}: {type(exc).__name__}: {exc}"
+        ) from exc
     if response.status_code >= 400:
         raise RuntimeError(
             f"Actor API error ({response.status_code}): {response.text[:300]}"

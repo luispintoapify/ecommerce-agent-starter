@@ -92,6 +92,23 @@ def render(products: list[Product], elapsed: float, summary: str) -> None:
         print()
 
 
+def _clean_error(exc: BaseException) -> str:
+    """One readable line for an unexpected failure at the CLI boundary.
+
+    Transport errors raised inside the MCP client's task group arrive wrapped in an
+    ExceptionGroup whose own message is "unhandled errors in a TaskGroup", so the
+    real cause is unwrapped before printing. Kept off ExceptionGroup syntax so the
+    module still imports on Python 3.10.
+    """
+    inner = getattr(exc, "exceptions", None)
+    if inner:
+        exc = inner[0]
+    name = type(exc).__name__
+    if name in {"ConnectError", "ConnectTimeout", "ReadTimeout", "ReadError", "gaierror"}:
+        return f"Could not reach the Apify MCP server: {name}: {exc}"
+    return f"{name}: {exc}"
+
+
 async def run(args: argparse.Namespace) -> int:
     from mcp_client import McpError, fetch_products, run_summary
 
@@ -100,6 +117,9 @@ async def run(args: argparse.Namespace) -> int:
         products, meta = await fetch_products(build_input(args), limit=args.limit)
     except McpError as err:
         print(str(err), file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - the CLI boundary; a traceback helps nobody
+        print(_clean_error(exc), file=sys.stderr)
         return 1
     elapsed = time.monotonic() - started
 
