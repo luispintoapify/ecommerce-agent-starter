@@ -16,7 +16,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import Result, Timer  # noqa: E402
+from harness import Result, Timer
 
 ARM = "native_browsing"
 MODEL = "claude-opus-5"

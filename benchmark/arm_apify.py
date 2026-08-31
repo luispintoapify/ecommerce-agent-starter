@@ -13,7 +13,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import Result, Timer  # noqa: E402
+from harness import Result, Timer
 
 ARM = "apify_mcp"
 
@@ -47,7 +47,7 @@ def billed_usd(run_id: str | None) -> float | None:
         from apify_products import api_token
 
         url = RUN_API.format(run_id=run_id) + f"?token={api_token()}"
-        with urllib.request.urlopen(url, timeout=20) as resp:  # noqa: S310 - fixed host
+        with urllib.request.urlopen(url, timeout=20) as resp:
             return float(_json.load(resp)["data"].get("usageTotalUsd") or 0.0)
     except Exception:  # noqa: BLE001 - a missing cost must not fail the question
         return None
@@ -95,7 +95,9 @@ def answer_from(products: list[Any], q: dict[str, Any]) -> str:
 
 
 async def run_one(q: dict[str, Any]) -> Result:
-    from mcp_client import fetch_products  # imported here so a missing key fails per-arm
+    from mcp_client import (
+        fetch_products,  # imported here so a missing key fails per-arm
+    )
 
     r = Result(arm=ARM, qid=q["id"])
     try:

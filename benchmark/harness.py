@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +188,10 @@ def score_one(q: dict[str, Any], r: Result) -> dict[str, Any]:
 
 
 class Timer:
+    #: Set on exit. Defaulted here so reading it inside the block yields 0 rather
+    #: than AttributeError, which is a trap in a file people are told to read.
+    ms: int = 0
+
     def __enter__(self):
         self.t = time.perf_counter()
         return self

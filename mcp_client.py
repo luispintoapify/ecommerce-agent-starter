@@ -108,57 +108,59 @@ async def fetch_products(
     from mcp.client.streamable_http import streamable_http_client
 
     headers = {"Authorization": f"Bearer {api_token()}"}
-    async with httpx.AsyncClient(headers=headers, timeout=300, follow_redirects=True) as http:
-        async with streamable_http_client(url, http_client=http) as streams:
-            read_stream, write_stream = streams[0], streams[1]
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
+    async with (
+        httpx.AsyncClient(headers=headers, timeout=300, follow_redirects=True) as http,
+        streamable_http_client(url, http_client=http) as streams,
+    ):
+        read_stream, write_stream = streams[0], streams[1]
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
 
-                run = await session.call_tool(MCP_TOOL_NAME, actor_input)
-                if run.is_error:
-                    raise McpError(f"{MCP_TOOL_NAME} failed: {_error_text(run)}")
+            run = await session.call_tool(MCP_TOOL_NAME, actor_input)
+            if run.is_error:
+                raise McpError(f"{MCP_TOOL_NAME} failed: {_error_text(run)}")
 
-                meta = _first_json_block(run)
-                if not isinstance(meta, dict):
-                    raise McpError("Could not parse the Actor tool result as JSON.")
+            meta = _first_json_block(run)
+            if not isinstance(meta, dict):
+                raise McpError("Could not parse the Actor tool result as JSON.")
 
-                # The Actor tool returns when its wait window elapses, not when the
-                # run ends, so poll before fetching. Skipping this returns an empty
-                # list from a dataset that has not been written yet.
-                polls = 0
-                while str(meta.get("status", "")).upper() not in TERMINAL:
-                    if polls >= MAX_POLLS:
-                        raise McpError(
-                            f"Run {meta.get('runId')} was still "
-                            f"{meta.get('status')} after {polls} polls. It may still "
-                            "finish; check the run in Apify Console."
-                        )
-                    polls += 1
-                    polled = await session.call_tool(
-                        RUN_TOOL,
-                        {"runId": meta.get("runId"), "waitSecs": POLL_WAIT_SECS},
-                    )
-                    if polled.is_error:
-                        raise McpError(f"{RUN_TOOL} failed: {_error_text(polled)}")
-                    updated = _first_json_block(polled)
-                    if not isinstance(updated, dict):
-                        raise McpError(f"Could not parse the {RUN_TOOL} result as JSON.")
-                    meta = updated
-
-                if str(meta.get("status", "")).upper() != "SUCCEEDED":
+            # The Actor tool returns when its wait window elapses, not when the
+            # run ends, so poll before fetching. Skipping this returns an empty
+            # list from a dataset that has not been written yet.
+            polls = 0
+            while str(meta.get("status", "")).upper() not in TERMINAL:
+                if polls >= MAX_POLLS:
                     raise McpError(
-                        f"Run finished as {meta.get('status')}, so there is no output "
-                        "to read."
+                        f"Run {meta.get('runId')} was still "
+                        f"{meta.get('status')} after {polls} polls. It may still "
+                        "finish; check the run in Apify Console."
                     )
-
-                dataset_id = _dataset_id(meta)
-                fetched = await session.call_tool(
-                    DATASET_TOOL, {"datasetId": dataset_id, "limit": limit}
+                polls += 1
+                polled = await session.call_tool(
+                    RUN_TOOL,
+                    {"runId": meta.get("runId"), "waitSecs": POLL_WAIT_SECS},
                 )
-                if fetched.is_error:
-                    raise McpError(f"{DATASET_TOOL} failed: {_error_text(fetched)}")
+                if polled.is_error:
+                    raise McpError(f"{RUN_TOOL} failed: {_error_text(polled)}")
+                updated = _first_json_block(polled)
+                if not isinstance(updated, dict):
+                    raise McpError(f"Could not parse the {RUN_TOOL} result as JSON.")
+                meta = updated
 
-                items = _items_from(_first_json_block(fetched))
+            if str(meta.get("status", "")).upper() != "SUCCEEDED":
+                raise McpError(
+                    f"Run finished as {meta.get('status')}, so there is no output "
+                    "to read."
+                )
+
+            dataset_id = _dataset_id(meta)
+            fetched = await session.call_tool(
+                DATASET_TOOL, {"datasetId": dataset_id, "limit": limit}
+            )
+            if fetched.is_error:
+                raise McpError(f"{DATASET_TOOL} failed: {_error_text(fetched)}")
+
+            items = _items_from(_first_json_block(fetched))
 
     fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return normalize_all(items, fetched_at), meta

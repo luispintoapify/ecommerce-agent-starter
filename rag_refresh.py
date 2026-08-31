@@ -25,8 +25,9 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any
 
 from apify_products import Product, normalize_all, run_actor_sync
 
@@ -48,7 +49,7 @@ def doc_id(product: Product) -> str:
     return hashlib.sha1(basis.encode("utf-8")).hexdigest()
 
 
-def fetch_urls(urls: List[str], limit: int, mode: str, listing: bool) -> List[Product]:
+def fetch_urls(urls: list[str], limit: int, mode: str, listing: bool) -> list[Product]:
     """One Actor call for the whole batch, not one per URL."""
     key = "listingUrls" if listing else "detailsUrls"
     payload = {
@@ -62,7 +63,7 @@ def fetch_urls(urls: List[str], limit: int, mode: str, listing: bool) -> List[Pr
     return normalize_all(items, fetched_at)
 
 
-def fetch_keyword(keyword: str, marketplaces: List[str], limit: int, mode: str) -> List[Product]:
+def fetch_keyword(keyword: str, marketplaces: list[str], limit: int, mode: str) -> list[Product]:
     payload = {
         "keyword": keyword,
         "marketplaces": marketplaces,
@@ -78,7 +79,7 @@ def fetch_keyword(keyword: str, marketplaces: List[str], limit: int, mode: str) 
 # --- sinks -------------------------------------------------------------------
 
 
-def sink_jsonl(products: List[Product], path: str, include_extras: bool = False) -> None:
+def sink_jsonl(products: list[Product], path: str, include_extras: bool = False) -> None:
     """Write documents to a file. No dependencies, and it shows you the shape.
 
     ``extras`` is excluded by default. One Amazon product carried 44 keys and
@@ -97,7 +98,7 @@ def sink_jsonl(products: List[Product], path: str, include_extras: bool = False)
     print(f"wrote {len(products)} documents to {path} ({size_mb:.1f} MB)")
 
 
-def sink_pinecone(products: List[Product]) -> None:
+def sink_pinecone(products: list[Product]) -> None:
     """Upsert into Pinecone.
 
     Kept to one function so swapping in Qdrant, Weaviate, or pgvector means
@@ -148,7 +149,7 @@ def sink_pinecone(products: List[Product]) -> None:
 # --- main --------------------------------------------------------------------
 
 
-def load_catalog(path: str) -> List[str]:
+def load_catalog(path: str) -> list[str]:
     with open(path, "r", encoding="utf-8") as handle:
         data = json.load(handle)
     if isinstance(data, dict):
@@ -195,7 +196,7 @@ def main() -> int:
         parser.error("give --catalog or --keyword")
 
     started = time.monotonic()
-    products: List[Product] = []
+    products: list[Product] = []
 
     try:
         if args.catalog:

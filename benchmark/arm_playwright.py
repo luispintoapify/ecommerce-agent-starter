@@ -19,7 +19,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import Result, Timer  # noqa: E402
+from harness import Result, Timer
 
 ARM = "diy_playwright"
 TIMEOUT_MS = 30_000
@@ -78,38 +78,37 @@ def run_one(q: dict[str, Any]) -> Result:
         return r
 
     try:
-        with Timer() as t:
-            with sync_playwright() as pw:
-                browser = pw.chromium.launch(headless=True)
-                page = browser.new_page(
-                    user_agent=(
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-                    )
+        with Timer() as t, sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            page = browser.new_page(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
                 )
-                try:
-                    page.goto(q["url"], timeout=TIMEOUT_MS, wait_until="domcontentloaded")
-                    body = (page.content() or "").lower()
-                    if any(m in body for m in BLOCK_MARKERS):
-                        r.blocked = True
-                        r.answer = ""
-                        r.raw = {"host": host, "reason": "interstitial served"}
-                        return r
+            )
+            try:
+                page.goto(q["url"], timeout=TIMEOUT_MS, wait_until="domcontentloaded")
+                body = (page.content() or "").lower()
+                if any(m in body for m in BLOCK_MARKERS):
+                    r.blocked = True
+                    r.answer = ""
+                    r.raw = {"host": host, "reason": "interstitial served"}
+                    return r
 
-                    price = _first_text(page, PRICE_SELECTORS.get(host, []))
-                    stock = _first_text(page, STOCK_SELECTORS.get(host, []))
-                    title = (page.title() or "").strip()
+                price = _first_text(page, PRICE_SELECTORS.get(host, []))
+                stock = _first_text(page, STOCK_SELECTORS.get(host, []))
+                title = (page.title() or "").strip()
 
-                    if not price:
-                        r.answer = f"Loaded the page but found no price with the selectors for {host}."
-                        r.raw = {"host": host, "title": title, "selector_miss": True}
-                    else:
-                        parts = [title or "(no title)", price]
-                        parts.append(stock.strip() if stock else "stock not found on the page")
-                        r.answer = " | ".join(parts) + f"  {q['url']}"
-                        r.raw = {"host": host}
-                finally:
-                    browser.close()
+                if not price:
+                    r.answer = f"Loaded the page but found no price with the selectors for {host}."
+                    r.raw = {"host": host, "title": title, "selector_miss": True}
+                else:
+                    parts = [title or "(no title)", price]
+                    parts.append(stock.strip() if stock else "stock not found on the page")
+                    r.answer = " | ".join(parts) + f"  {q['url']}"
+                    r.raw = {"host": host}
+            finally:
+                browser.close()
         r.latency_ms = t.ms
     except Exception as exc:  # noqa: BLE001
         msg = f"{type(exc).__name__}: {exc}"
@@ -127,7 +126,9 @@ def _first_text(page: Any, selectors: list[str]) -> str:
                 txt = (el.inner_text() or "").strip()
                 if txt:
                     return txt
-        except Exception:  # noqa: BLE001 - a bad selector is not a run failure
+        # A failing selector means try the next one, so this is the behaviour, not
+        # an oversight. Logging every miss would bury the value it does find.
+        except Exception:  # noqa: BLE001, S112
             continue
     return ""
 

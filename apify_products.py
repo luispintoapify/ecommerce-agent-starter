@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, asdict, field
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 ACTOR_ID = "apify~e-commerce-scraping-tool"
 MCP_TOOL_NAME = "apify--e-commerce-scraping-tool"

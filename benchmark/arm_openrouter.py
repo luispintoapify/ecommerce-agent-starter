@@ -43,9 +43,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import Result, Timer  # noqa: E402
-
-from arm_browsing import SYSTEM  # noqa: E402  the prompts must be identical
+from arm_browsing import SYSTEM
+from harness import Result, Timer
 
 ARM = "websearch_openrouter"
 
@@ -78,7 +77,7 @@ def _call(payload: dict[str, Any], token: str) -> dict[str, Any]:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=TIMEOUT_SECS) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=TIMEOUT_SECS) as resp:
         body = json.load(resp)
     # run-sync-get-dataset-items returns the dataset, so a list of one row. An input
     # rejection comes back as a bare object instead, which is why both are handled.

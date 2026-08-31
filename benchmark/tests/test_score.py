@@ -5,10 +5,18 @@ Every case below is an answer shape observed from a real model or scraper.
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import (Result, score_one, prices_in, money_in, urls_in, mentions_absent,
-                     asserts_out_of_stock)
+from harness import (
+    Result,
+    asserts_out_of_stock,
+    mentions_absent,
+    money_in,
+    prices_in,
+    score_one,
+    urls_in,
+)
 
 Q_PRICE = {"id": "q01", "type": "price", "expect_id": "B0F643TQ4W",
            "url": "https://www.amazon.com/dp/B0F643TQ4W"}
