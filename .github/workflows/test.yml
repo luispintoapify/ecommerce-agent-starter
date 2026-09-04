@@ -12,10 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.10 is the floor: the official mcp SDK requires it. 3.14 is included
-        # because it is where this was developed, and the version a maintainer
-        # runs is the worst one to leave untested.
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        # The floor and the ceiling, which are the two that actually catch a
+        # version break. 3.10 is the floor because the official mcp SDK requires
+        # it. 3.14 is where this was developed, and the version a maintainer runs
+        # is the worst one to leave untested.
+        python-version: ["3.10", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -34,9 +35,15 @@ jobs:
         # retailer being slow.
         run: pytest -q
 
+      - name: Compile every module
+        # The test suite imports neither the benchmark arms nor harness.py, so a
+        # syntax error in benchmark/ used to pass CI. compileall reads all of it
+        # without needing playwright or an Apify token installed.
+        run: python -m compileall -q apify_products.py mcp_client.py rag_refresh.py runtime_call.py benchmark/
+
       - name: Import check
-        # Catches a syntax error or a bad import in the entry points, which the
-        # unit tests alone would not reach.
+        # Compiling proves the syntax parses. Importing proves the module body
+        # runs and the entry points resolve their arguments.
         run: |
           python -c "import apify_products, mcp_client"
           python runtime_call.py --help > /dev/null

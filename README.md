@@ -223,7 +223,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The fixtures in `tests/fixtures/` are **real Actor output**, captured from live runs against Amazon and Walmart. Every quirk asserted in the suite was found by running the Actor, not by imagining what it might return, and one test asserts the MCP and REST paths normalize to the same product. No token is needed and no credits are spent, so CI runs it on every push across Python 3.10 through 3.13.
+The fixtures in `tests/fixtures/` are **real Actor output**, captured from live runs against Amazon and Walmart. Every quirk asserted in the suite was found by running the Actor, not by imagining what it might return, and one test asserts the MCP and REST paths normalize to the same product. No token is needed and no credits are spent, so CI runs it on every push on Python 3.10 and 3.14, the floor and the version this was developed on.
 
 If a retailer changes shape, recapture the fixture rather than loosening the assertion.
 
