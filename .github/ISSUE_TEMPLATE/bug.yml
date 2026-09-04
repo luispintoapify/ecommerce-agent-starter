@@ -1,0 +1,56 @@
+name: Bug
+description: Something in the scripts, skills, or benchmark does not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste your `APIFY_TOKEN`, or any output that contains it.**
+        Redact it as `apify_api_...` before you paste a command or a traceback.
+        If you have already posted one, revoke it in the Apify console under
+        Settings, Integrations. Rotating is free and immediate.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - runtime_call.py
+        - rag_refresh.py
+        - apify_products.py
+        - mcp_client.py
+        - benchmark
+        - skills
+        - prompts
+        - docs or README
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: "`python --version`. CI covers 3.10 and 3.14."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Command you ran
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What happened
+      description: Full traceback or output, with any token redacted.
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before opening
+      options:
+        - label: "`pytest -q` passes on my machine, or I have said below that it does not"
+        - label: I have removed every credential from the text above
+          required: true

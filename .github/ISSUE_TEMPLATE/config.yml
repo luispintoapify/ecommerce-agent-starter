@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Apify platform or Actor problem
+    url: https://docs.apify.com/platform
+    about: For the Actor or the MCP server itself rather than this starter, start with the Apify docs.
+  - name: Security issue
+    url: https://github.com/luispintoapify/ecommerce-agent-starter/security/advisories/new
+    about: Report anything that could expose a credential privately, not as a public issue.

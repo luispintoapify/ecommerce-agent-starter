@@ -1,0 +1,41 @@
+name: Retailer field quirk
+description: A retailer returns a shape this code mishandles
+labels: ["retailer-quirk"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful issue you can open here. A raw dataset item
+        becomes a test fixture, and the fixture is what stops the bug coming
+        back.
+
+        **Do not paste your `APIFY_TOKEN`.** It does not appear in dataset
+        output, so a raw item is safe to share. If you paste one by accident,
+        revoke it in the Apify console under Settings, Integrations.
+  - type: input
+    id: retailer
+    attributes:
+      label: Retailer
+      placeholder: www.walmart.com
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Product or search URL you passed in
+    validations:
+      required: true
+  - type: textarea
+    id: raw
+    attributes:
+      label: Raw dataset item
+      description: The item as the Actor returned it, unedited. Trim long `extras` if you must, and say that you did.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What this code did with it, and what it should have done
+    validations:
+      required: true
